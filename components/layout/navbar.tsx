@@ -30,7 +30,6 @@ export default function Navbar({
   const [mounted, setMounted] = useState(false);
   const [hasNotification, setHasNotification] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [isDayEndModalOpen, setIsDayEndModalOpen] = useState(false);
   const router = useRouter();
   useEffect(() => setMounted(true), []);
 
@@ -51,7 +50,7 @@ export default function Navbar({
   };
 
   return (
-    <div className="h-12 border-b border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-950/60 backdrop-blur">
+    <div className="h-12 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-[100]">
       <div className="max-w-[1500px] mx-auto px-4 md:px-6 lg:px-8 h-full flex items-center justify-between">
         {/* Left: Sidebar Toggle */}
         <div className="flex items-center gap-2">
@@ -68,26 +67,6 @@ export default function Navbar({
 
         {/* Right: Notification + Theme + User */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-2 hidden md:flex"
-            onClick={() => setIsDayEndModalOpen(true)}
-          >
-            <CalendarClock size={14} />
-            <span className="text-xs font-medium">Day End</span>
-          </Button>
-
-          {/* Mobile Icon Only */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8 md:hidden"
-            onClick={() => setIsDayEndModalOpen(true)}
-          >
-            <CalendarClock size={14} />
-          </Button>
-
           <div className="relative">
             {/* Notification */}
             {hasNotification && (
@@ -122,10 +101,10 @@ export default function Navbar({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-80 p-2 mt-2 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 shadow-[0_0_40px_-10px_rgba(0,0,0,0.2)] rounded-2xl animate-in fade-in zoom-in-95 slide-in-from-top-2"
+                className="w-80 p-2 mt-2 bg-card/90 backdrop-blur-xl border border-border shadow-xl rounded-2xl animate-in fade-in zoom-in-95 slide-in-from-top-2"
               >
                 <div className="flex items-center justify-between px-3 py-2 mb-1">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Notifications
                   </span>
                   {notifications.length > 0 && (
@@ -135,11 +114,11 @@ export default function Navbar({
                   )}
                 </div>
 
-                <div className="h-px w-full bg-linear-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent mb-2" />
+                <div className="h-px w-full bg-linear-to-r from-transparent via-border to-transparent mb-2" />
 
                 <div className="max-h-[300px] overflow-y-auto pr-1">
                   {notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-2 text-zinc-400">
+                    <div className="flex flex-col items-center justify-center py-2 text-muted-foreground/50">
                       <BellRing className="w-2 h-2 opacity-10" />
                       <p className="text-xs font-medium mb-2">
                         Notifications not available
@@ -149,10 +128,10 @@ export default function Navbar({
                     notifications.map((item: any, index: number) => (
                       <DropdownMenuItem
                         key={index}
-                        className="group relative flex flex-col items-start gap-1 p-3 mb-1 rounded-xl cursor-pointer transition-all duration-300 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/50 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 focus:bg-zinc-100/50 dark:focus:bg-zinc-900/50"
+                        className="group relative flex flex-col items-start gap-1 p-3 mb-1 rounded-xl cursor-pointer transition-all duration-300 hover:bg-accent focus:bg-accent border border-transparent hover:border-border"
                       >
                         <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
+                          <span className="text-xs font-medium text-foreground group-hover:text-primary transition-colors">
                             {item.doc_no}
                           </span>
                           <span className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />

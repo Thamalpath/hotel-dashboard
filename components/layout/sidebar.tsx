@@ -29,10 +29,10 @@ export function Sidebar({
           <button
             onClick={() => setExpanded(isExpanded ? null : item.label)}
             className={cn(
-              "flex w-full items-center rounded-xl px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800",
+              "flex w-full items-center rounded-xl px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors",
               active
-                ? "bg-neutral-100 dark:bg-neutral-800 font-medium"
-                : "text-neutral-600 dark:text-neutral-300",
+                ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                : "text-muted-foreground",
               open ? "gap-3 justify-start" : "justify-center",
             )}
             title={!open ? item.label : undefined}
@@ -55,10 +55,10 @@ export function Sidebar({
           <Link
             href={item.href as any}
             className={cn(
-              "flex items-center rounded-xl px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800",
+              "flex items-center rounded-xl px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors",
               active
-                ? "bg-neutral-100 dark:bg-neutral-800 font-medium"
-                : "text-neutral-600 dark:text-neutral-300",
+                ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                : "text-muted-foreground",
               open ? "gap-3 justify-start" : "justify-center",
             )}
             title={!open ? item.label : undefined}
@@ -76,7 +76,7 @@ export function Sidebar({
                 return (
                   <hr
                     key={`divider-${index}`}
-                    className="my-2 border-neutral-200 dark:border-neutral-700"
+                    className="my-2 border-border"
                   />
                 );
               }
@@ -88,10 +88,10 @@ export function Sidebar({
                   key={child.href || `link-${index}`}
                   href={child.href as any}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800",
+                    "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors",
                     childActive
-                      ? "bg-neutral-100 dark:bg-neutral-800 font-medium"
-                      : "text-neutral-600 dark:text-neutral-300",
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground",
                   )}
                 >
                   {ChildIcon && <ChildIcon size={16} />}
@@ -121,58 +121,58 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "group fixed top-0 left-0 z-[110] h-screen bg-white dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 transition-all duration-300 overflow-hidden",
+          "group fixed top-0 left-0 z-[110] h-screen bg-card border-r border-border transition-all duration-300 overflow-hidden",
           open ? "w-64" : "w-0 lg:w-16 border-none lg:border-r",
         )}
       >
         <div className="flex flex-col h-full p-3 pt-2">
           {/* Logo */}
-          <div className="flex items-center justify-center px-2 py-2 text-lg font-semibold">
-            {open ? (
+          <div className={cn(
+            "flex items-center gap-2 py-2 font-semibold whitespace-nowrap",
+            open ? "px-2" : "px-0 justify-center"
+          )}>
+            <div className="flex items-center justify-center w-10 h-10 shrink-0">
               <Image
-                src="/images/logo4.png"
+                src="/icon3.png"
                 alt="Brand Logo"
-                width={140}
-                height={140}
+                width={40}
+                height={40}
+                priority
               />
-            ) : (
-              "VD"
-            )}
+            </div>
+
+            {/* Text - Only show when open */}
+            <span
+              className={cn(
+                "text-lg transition-all duration-300 origin-left overflow-hidden",
+                open ? "opacity-100 scale-100" : "opacity-0 scale-0 w-0"
+              )}
+            >
+              Hotel Dashboard
+            </span>
           </div>
 
           {/* Navigation */}
-          <div className="flex-1 overflow-y-auto">
-            {navSections.map((section, idx) => (
-              <div key={idx} className="mt-2">
-                <div
-                  className={cn(
-                    "px-2 text-xs uppercase tracking-wide text-neutral-500",
-                    open ? "block" : "hidden",
-                  )}
-                >
-                  {section.title}
+          {open && (
+            <div className="flex-1 overflow-y-auto">
+              {navSections.map((section, idx) => (
+                <div key={idx} className="mt-2">
+                  <div className="px-2 text-xs uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                    {section.title}
+                  </div>
+                  <nav className="mt-1 space-y-1">
+                    {section.items.map(renderItem)}
+                  </nav>
                 </div>
-                <nav className="mt-1 space-y-1">
-                  {section.items.map(renderItem)}
-                </nav>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {open ? (
-            <footer className="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+          {open && (
+            <footer className="mt-3 pt-3 border-t border-border">
               <p className="text-center text-xs text-neutral-500 truncate">
                 V&nbsp;1.0.0
               </p>
-            </footer>
-          ) : (
-            <footer className="mt-3 pb-2">
-              <span
-                className="block text-[10px] leading-none text-neutral-500 text-center"
-                title="V 1.0.0"
-              >
-                V1
-              </span>
             </footer>
           )}
         </div>
