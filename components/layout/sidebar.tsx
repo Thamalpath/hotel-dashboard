@@ -133,7 +133,7 @@ export function Sidebar({
           )}>
             <div className="flex items-center justify-center w-10 h-10 shrink-0">
               <Image
-                src="/icon3.png"
+                src="/icon1.png"
                 alt="Brand Logo"
                 width={40}
                 height={40}
