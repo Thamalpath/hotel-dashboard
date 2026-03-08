@@ -1,8 +1,10 @@
 "use client";
-import Navbar from "@/components/layout/navbar";
-import { Sidebar } from "../../components/layout/sidebar";
-import { useEffect, useState } from "react";
+
 import { cn } from "@/utils/cn";
+import { useEffect, useState } from "react";
+import Navbar from "@/components/layout/navbar";
+import Footer from "@/components/layout/footer";
+import { Sidebar } from "../../components/layout/sidebar";
 
 export default function DashboardLayout({
   children,
@@ -50,11 +52,12 @@ export default function DashboardLayout({
 
       <div
         className={cn(
-          "flex-1 w-full pt-16 pb-6 lg:pt-20 lg:pb-8 transition-all duration-300 min-h-screen",
+          "flex-1 flex flex-col min-h-screen w-full pt-6 pb-2 lg:pt-10 lg:pb-4 transition-all duration-300",
           contentLeft,
         )}
       >
-        <main className="container-page h-full">{children}</main>
+        <main className="container-page flex-1 w-full">{children}</main>
+        <Footer />
       </div>
     </div>
   );
