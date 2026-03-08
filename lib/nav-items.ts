@@ -51,41 +51,34 @@ export const navSections: NavSection[] = [
             label: "Merchants",
             icon: Building2,
           },
-          // {
-          //   href: "/dashboard/master/merchants",
-          //   label: "Merchants",
-          //   icon: Building2,
-          // },
         ],
       },
-    ]
-  }
-  //     {
-  //       label: "User Management",
-  //       icon: UserCog,
-  //       children: [
-  //         {
-  //           href: "/dashboard/users",
-  //           label: "Users",
-  //           icon: Users,
-  //         },
-  //         {
-  //           href: "/dashboard/roles",
-  //           label: "Roles",
-  //           icon: ShieldCheck,
-  //         },
-  //         {
-  //           href: "/dashboard/permissions",
-  //           label: "Permissions",
-  //           icon: LockKeyhole,
-  //         },
-  //         {
-  //           href: "/dashboard/roles/assign-permissions",
-  //           label: "Permissions Assigning",
-  //           icon: KeySquare,
-  //         },
-  //       ],
-  //     },
-  //   ],
-  // },
+      {
+        label: "User Management",
+        icon: UserCog,
+        children: [
+          {
+            href: "/dashboard/users",
+            label: "Users",
+            icon: Users,
+          },
+          {
+            href: "/dashboard/roles",
+            label: "Roles",
+            icon: ShieldCheck,
+          },
+          {
+            href: "/dashboard/permissions",
+            label: "Permissions",
+            icon: LockKeyhole,
+          },
+          {
+            href: "/dashboard/roles/assign-permissions",
+            label: "Permissions Assigning",
+            icon: KeySquare,
+          },
+        ],
+      },
+    ],
+  },
 ];
