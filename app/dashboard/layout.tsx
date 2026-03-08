@@ -36,7 +36,7 @@ export default function DashboardLayout({
   const contentLeft = open ? "lg:pl-64" : "lg:pl-16";
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex w-full">
       <Sidebar open={open} onClose={() => setOpen(false)} />
 
       <div
@@ -50,11 +50,11 @@ export default function DashboardLayout({
 
       <div
         className={cn(
-          "pt-6 transition-all duration-300 min-h-screen",
+          "flex-1 w-full pt-16 pb-6 lg:pt-20 lg:pb-8 transition-all duration-300 min-h-screen",
           contentLeft,
         )}
       >
-        <main className="container-page">{children}</main>
+        <main className="container-page h-full">{children}</main>
       </div>
     </div>
   );
