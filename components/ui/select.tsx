@@ -1,8 +1,9 @@
 "use client";
+
 import * as React from "react";
+import { cn } from "@/utils/cn";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { ChevronDown, ChevronUp, Check } from "lucide-react";
-import { cn } from "@/utils/cn";
 
 export function Select({ children, ...props }: SelectPrimitive.SelectProps) {
   return <SelectPrimitive.Root {...props}>{children}</SelectPrimitive.Root>;

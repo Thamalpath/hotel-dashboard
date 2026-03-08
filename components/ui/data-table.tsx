@@ -104,11 +104,11 @@ export function DataTable<TData, TValue>({
       </div>
       <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
         <table className="w-full text-xs">
-          <thead className="bg-neutral-50 dark:bg-neutral-900/60">
+          <thead className="bg-muted/80 text-muted-foreground">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((h) => (
-                  <th key={h.id} className="text-left px-4 py-3 font-medium">
+                  <th key={h.id} className="text-left px-4 py-3 font-semibold uppercase tracking-wider text-[11px]">
                     {h.isPlaceholder ? null : (
                       <div
                         onClick={h.column.getToggleSortingHandler()}
@@ -131,10 +131,10 @@ export function DataTable<TData, TValue>({
                 <tr
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="border-t border-neutral-100 dark:border-neutral-800"
+                  className="even:bg-muted/30 transition-colors hover:bg-muted/50"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
+                    <td key={cell.id} className="px-4 py-2">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),
