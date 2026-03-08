@@ -76,7 +76,7 @@ export default function LoginPage() {
         <div className="max-w-md xl:max-w-lg 2xl:max-w-xl text-center z-10 w-full flex flex-col items-center">
           <div className="relative w-48 h-48 md:w-56 md:h-56 lg:w-72 lg:h-72 xl:w-80 xl:h-80 mb-6 lg:mb-10 transition-transform duration-500 hover:scale-110 drop-shadow-2xl">
             <Image
-              src="/icon3.png"
+              src="/icon1.png"
               alt="Login Illustration"
               fill
               className="object-contain"
@@ -91,9 +91,9 @@ export default function LoginPage() {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="flex items-center justify-center p-6 sm:p-8 lg:p-12 xl:p-16 bg-muted/20 dark:bg-background md:col-span-1">
+      <div className="flex items-center justify-center p-6 sm:p-8 lg:p-12 xl:p-16 bg-background dark:bg-background md:col-span-1">
         <div className="w-full max-w-md xl:max-w-lg flex flex-col items-center">
-          <Card className="w-full border-0 shadow-none lg:shadow-lg bg-white">
+          <Card className="w-full p-6 border-0 shadow-none lg:shadow-xl bg-card">
             <CardHeader className="text-center space-y-2">
               <h1 className="text-3xl sm:text-4xl font-bold">Login</h1>
             </CardHeader>
@@ -150,7 +150,7 @@ export default function LoginPage() {
       </div>
 
       {/* Theme Toggle Button */}
-      {mounted && (
+      {/* {mounted && (
         <Button
           variant="outline"
           size="icon"
@@ -159,7 +159,7 @@ export default function LoginPage() {
         >
           {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
         </Button>
-      )}
+      )} */}
     </div>
   );
 }
