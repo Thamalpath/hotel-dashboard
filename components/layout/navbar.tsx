@@ -126,7 +126,7 @@ export default function Navbar({
                   )}
                 </div>
 
-                <div className="h-px w-full bg-linear-to-r from-transparent via-border to-transparent mb-2" />
+                <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent mb-2" />
 
                 <div className="max-h-[300px] overflow-y-auto pr-1">
                   {notifications.length === 0 ? (
