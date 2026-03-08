@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import {
   LogOut,
   User,
   BellRing,
-  CalendarClock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,27 +24,40 @@ export default function Navbar({
 }: {
   onToggleSidebar: () => void;
 }) {
-  const fetched = useRef(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [userName, setUserName] = useState<string>("");
   const [hasNotification, setHasNotification] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const router = useRouter();
-  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    setMounted(true);
+    // Fetch user details from local storage
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user && user.name) {
+          setUserName(user.name);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse user details:", e);
+    }
+  }, []);
 
   const handleLogout = () => {
-    // Clear authentication state
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("isLoggedIn");
-      localStorage.removeItem("userLocation");
+      localStorage.removeItem("user");
     } catch {}
 
     // Expire cookie so middleware treats user as logged out
     document.cookie =
       "isLoggedIn=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
-    // Redirect to login
     router.push("/login");
   };
 
@@ -158,24 +170,28 @@ export default function Navbar({
           )}
 
           {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="User menu"
-                className="h-8 w-8"
-              >
-                <User size={14} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {mounted && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  aria-label="User menu"
+                  className="h-8 gap-2 px-2"
+                >
+                  <User size={14} />
+                  <span className="text-xs font-medium max-w-[100px] truncate">
+                    {userName || "User"}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
     </div>
