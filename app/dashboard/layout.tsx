@@ -52,7 +52,7 @@ export default function DashboardLayout({
 
       <div
         className={cn(
-          "flex-1 flex flex-col min-h-screen w-full pt-6 pb-2 lg:pt-10 lg:pb-4 transition-all duration-300",
+          "flex-1 flex flex-col min-h-screen w-full pt-6 lg:pt-10 transition-all duration-300",
           contentLeft,
         )}
       >
