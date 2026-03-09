@@ -39,7 +39,7 @@ export const SelectContent = React.forwardRef<
       position="popper"
       sideOffset={4}
       className={cn(
-        "z-[150] w-[var(--radix-select-trigger-width)] border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800 shadow-md",
+        "z-[150] w-[var(--radix-select-trigger-width)] border border-border bg-popover text-popover-foreground shadow-md rounded-xl overflow-hidden animate-in fade-in-80 zoom-in-95",
         className
       )}
       {...props}
@@ -65,7 +65,7 @@ export const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-7 pr-2 text-xs outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800",
+      "relative flex w-full cursor-default select-none items-center rounded-sm py-2 pl-8 pr-2 text-xs outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
