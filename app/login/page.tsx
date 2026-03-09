@@ -4,19 +4,19 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { authApi } from "@/utils/api";
+import { Sun, Moon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Sun, Moon } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,7 +150,7 @@ export default function LoginPage() {
       </div>
 
       {/* Theme Toggle Button */}
-      {/* {mounted && (
+      {mounted && (
         <Button
           variant="outline"
           size="icon"
@@ -159,7 +159,7 @@ export default function LoginPage() {
         >
           {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
         </Button>
-      )} */}
+      )}
     </div>
   );
 }
