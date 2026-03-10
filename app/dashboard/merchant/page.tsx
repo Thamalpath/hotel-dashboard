@@ -19,33 +19,32 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-type Hotel = {
+type MerchantHotel = {
   id: number;
   hotel_name: string;
-  hotel_code: string;
   domain: string;
   phone: string;
   email: string;
   status: 'active' | 'suspended';
 };
 
-type HotelAdminData = {
+type MerchantData = {
   id: number;
   name: string;
   email: string;
-  hotel: Hotel | null;
+  hotel: MerchantHotel | null;
   roles: string[];
 };
 
-export default function HotelAdminsPage() {
+export default function MerchantsPage() {
   const { toast } = useToast();
   const fetched = useRef(false);
   const [loading, setLoading] = useState(false);
-  const [admins, setAdmins] = useState<HotelAdminData[]>([]);
+  const [merchants, setMerchants] = useState<MerchantData[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editingAdmin, setEditingAdmin] = useState<HotelAdminData | null>(null);
+  const [editingMerchant, setEditingMerchant] = useState<MerchantData | null>(null);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -59,8 +58,8 @@ export default function HotelAdminsPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get("/super-admin/admins");
-      setAdmins(response.data.data);
+      const response = await api.get("/super-admin/merchants");
+      setMerchants(response.data.data);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -80,7 +79,7 @@ export default function HotelAdminsPage() {
   }, [fetchData]);
 
   const handleCreate = () => {
-    setEditingAdmin(null);
+    setEditingMerchant(null);
     setFormData({
       name: "",
       email: "",
@@ -92,15 +91,15 @@ export default function HotelAdminsPage() {
     setIsSheetOpen(true);
   };
 
-  const handleEdit = (admin: HotelAdminData) => {
-    setEditingAdmin(admin);
+  const handleEdit = (merchant: MerchantData) => {
+    setEditingMerchant(merchant);
     setFormData({
-      name: admin.name,
-      email: admin.email,
+      name: merchant.name,
+      email: merchant.email,
       password: "",
-      hotel_name: admin.hotel?.hotel_name || "",
-      domain: admin.hotel?.domain || "",
-      phone: admin.hotel?.phone || "",
+      hotel_name: merchant.hotel?.hotel_name || "",
+      domain: merchant.hotel?.domain || "",
+      phone: merchant.hotel?.phone || "",
     });
     setIsSheetOpen(true);
   };
@@ -112,13 +111,13 @@ export default function HotelAdminsPage() {
   const confirmDelete = async () => {
     if (deleteId === null) return;
     try {
-      await api.delete(`/super-admin/admins/${deleteId}`);
-      toast({ title: "Success", description: "Hotel Admin deleted successfully", type: "success" });
+      await api.delete(`/super-admin/merchants/${deleteId}`);
+      toast({ title: "Success", description: "Merchant deleted successfully", type: "success" });
       fetchData();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to delete admin",
+        description: error.response?.data?.message || "Failed to delete merchant",
         type: "error",
       });
     } finally {
@@ -130,19 +129,19 @@ export default function HotelAdminsPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (editingAdmin) {
-        await api.put(`/super-admin/admins/${editingAdmin.id}`, formData);
-        toast({ title: "Success", description: "Hotel Admin updated successfully", type: "success" });
+      if (editingMerchant) {
+        await api.put(`/super-admin/merchants/${editingMerchant.id}`, formData);
+        toast({ title: "Success", description: "Merchant updated successfully", type: "success" });
       } else {
-        await api.post("/super-admin/admins", formData);
-        toast({ title: "Success", description: "Hotel Admin created successfully", type: "success" });
+        await api.post("/super-admin/merchants", formData);
+        toast({ title: "Success", description: "Merchant created successfully", type: "success" });
       }
       setIsSheetOpen(false);
       fetchData();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to save hotel admin",
+        description: error.response?.data?.message || "Failed to save merchant",
         type: "error",
       });
     } finally {
@@ -150,7 +149,7 @@ export default function HotelAdminsPage() {
     }
   };
 
-  const columns: ColumnDef<HotelAdminData>[] = [
+  const columns: ColumnDef<MerchantData>[] = [
     {
       id: "index",
       header: "#",
@@ -158,7 +157,7 @@ export default function HotelAdminsPage() {
     },
     {
       accessorKey: "name",
-      header: "Admin Details",
+      header: "Merchant Details",
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
@@ -228,11 +227,11 @@ export default function HotelAdminsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Hotel Administration</h1>
+          <h1 className="text-2xl font-bold">Merchant Management</h1>
           <p className="text-muted-foreground text-sm">Manage hotel administrators and their accounts.</p>
         </div>
         <Button onClick={handleCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> Register Hotel Admin
+          <Plus className="mr-2 h-4 w-4" /> Register Merchant
         </Button>
       </div>
 
@@ -241,20 +240,20 @@ export default function HotelAdminsPage() {
           <div className="flex h-[300px] w-full items-center justify-center">
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-sm">Fetching administrators...</span>
+              <span className="text-sm">Fetching merchants...</span>
             </div>
           </div>
         ) : (
-          <DataTable columns={columns} data={admins} searchable="name" />
+          <DataTable columns={columns} data={merchants} searchable="name" />
         )}
       </div>
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetContent className="sm:max-w-xl overflow-y-auto">
           <SheetHeader className="pb-4 border-b border-border">
-            <SheetTitle>{editingAdmin ? "Edit Hotel Admin" : "Register Hotel Admin"}</SheetTitle>
+            <SheetTitle>{editingMerchant ? "Edit Merchant" : "Register Merchant"}</SheetTitle>
             <SheetDescription>
-              {editingAdmin ? "Update administrator and hotel details." : "Create a new administrator account and link them to a hotel."}
+              {editingMerchant ? "Update merchant and hotel details." : "Create a new merchant account and link them to a hotel."}
             </SheetDescription>
           </SheetHeader>
           
@@ -286,13 +285,13 @@ export default function HotelAdminsPage() {
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="password">Password {editingAdmin && "(Leave blank to keep current)"}</Label>
+                    <Label htmlFor="password">Password {editingMerchant && "(Leave blank to keep current)"}</Label>
                     <Input
                         id="password"
                         type="password"
                         value={formData.password}
                         onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                        required={!editingAdmin}
+                        required={!editingMerchant}
                     />
                 </div>
             </div>
@@ -343,7 +342,7 @@ export default function HotelAdminsPage() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Saving...
                     </>
-                ) : editingAdmin ? "Update Admin" : "Register Admin"}
+                ) : editingMerchant ? "Update Merchant" : "Register Merchant"}
               </Button>
             </div>
           </form>
@@ -354,8 +353,8 @@ export default function HotelAdminsPage() {
         isOpen={deleteId !== null}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Delete Hotel Admin"
-        description="Are you sure you want to delete this administrator? This will also remove the linked hotel account. This action cannot be undone."
+        title="Delete Merchant"
+        description="Are you sure you want to delete this merchant? This will also remove the linked hotel account. This action cannot be undone."
         variant="destructive"
       />
     </div>
