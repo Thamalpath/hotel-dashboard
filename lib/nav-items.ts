@@ -44,7 +44,7 @@ export const navSections: NavSection[] = [
     items: [
       {
         href: "/dashboard/merchant",
-        label: "Hotel Registration",
+        label: "Merchant Management",
         icon: Building2,
       },
       {
