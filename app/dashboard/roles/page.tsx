@@ -120,8 +120,9 @@ export default function RolesPage() {
 
   const columns: ColumnDef<Role>[] = [
     {
-      accessorKey: "id",
-      header: "ID",
+      id: "index",
+      header: "#",
+      cell: ({ row }) => row.index + 1,
     },
     {
       accessorKey: "name",

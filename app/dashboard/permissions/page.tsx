@@ -118,8 +118,9 @@ export default function PermissionsPage() {
 
   const columns: ColumnDef<Permission>[] = [
     {
-      accessorKey: "id",
-      header: "ID",
+      id: "index",
+      header: "#",
+      cell: ({ row }) => row.index + 1,
     },
     {
       accessorKey: "name",
