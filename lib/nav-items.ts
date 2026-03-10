@@ -43,15 +43,9 @@ export const navSections: NavSection[] = [
     title: "Pages",
     items: [
       {
-        label: "Master Files",
-        icon: Archive,
-        children: [
-          {
-            href: "/dashboard/master/merchants",
-            label: "Merchants",
-            icon: Building2,
-          },
-        ],
+        href: "/dashboard/merchant",
+        label: "Hotel Registration",
+        icon: Building2,
       },
       {
         label: "User Management",
