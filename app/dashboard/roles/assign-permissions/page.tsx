@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type Role = {
+type User = {
   id: number;
   name: string;
   permissions: Permission[];
@@ -64,8 +64,8 @@ export default function AssignPermissionsPage() {
   const fetched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
@@ -73,10 +73,10 @@ export default function AssignPermissionsPage() {
     try {
       setLoading(true);
       const [rolesRes, permissionsRes] = await Promise.all([
-        api.get("/admin/roles"),
+        api.get("/admin/users"),
         api.get("/admin/all-permissions"),
       ]);
-      setRoles(rolesRes.data.data || rolesRes.data);
+      setUsers(rolesRes.data.data || rolesRes.data);
       setAllPermissions(permissionsRes.data.data || permissionsRes.data);
     } catch (error: any) {
       toast({
@@ -96,16 +96,26 @@ export default function AssignPermissionsPage() {
     }
   }, [fetchData]);
 
-  useEffect(() => {
-    if (selectedRoleId) {
-      const role = roles.find((r) => r.id.toString() === selectedRoleId);
-      if (role) {
-        setSelectedPermissions(role.permissions.map((p) => p.name));
-      }
-    } else {
-      setSelectedPermissions([]);
-    }
-  }, [selectedRoleId, roles]);
+useEffect(() => {
+  if (selectedUserId) {
+    // Fetch the user's current permissions
+    api.get(`/admin/users/${selectedUserId}`)
+      .then((res) => {
+        const user = res.data.data || res.data;
+        setSelectedPermissions(user.permissions?.map((p: Permission) => p.name) || []);
+      })
+      .catch((error) => {
+        toast({
+          title: "Error",
+          description: "Failed to load user permissions",
+          type: "error",
+        });
+        setSelectedPermissions([]);
+      });
+  } else {
+    setSelectedPermissions([]);
+  }
+}, [selectedUserId, toast]);
 
   const handleTogglePermission = (permissionName: string) => {
     setSelectedPermissions((prev) =>
@@ -138,24 +148,20 @@ export default function AssignPermissionsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedRoleId) return;
+    if (!selectedUserId) return;
     setSaving(true);
     try {
-      await api.post(`/admin/roles/${selectedRoleId}/assign-permissions`, {
+      await api.post(`/admin/roles/assign-permissions-to-user/${selectedUserId}`, {  // Changed endpoint
         permissions: selectedPermissions,
       });
       toast({
         title: "Success",
-        description: "Permissions assigned successfully",
+        description: "Permissions assigned to user successfully",
         type: "success",
       });
-      fetchData();
+      setSelectedUserId("");
+      setSelectedPermissions([]);
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to assign permissions",
-        type: "error",
-      });
     } finally {
       setSaving(false);
     }
@@ -177,16 +183,16 @@ export default function AssignPermissionsPage() {
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto ml-auto">
           <div className="w-full sm:w-[280px]">
-             <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                 <SelectTrigger className="h-10 bg-muted/50 border-transparent hover:border-primary/50 transition-all rounded-lg">
-                  <SelectValue placeholder="Select target role" />
+                  <SelectValue placeholder="Select target user" />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
                       <div className="flex items-center gap-2">
                         <ShieldCheck size={14} className="text-primary" />
-                        <span className="font-medium text-sm">{role.name}</span>
+                        <span className="font-medium text-sm">{user.name}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -221,7 +227,7 @@ export default function AssignPermissionsPage() {
                 size="sm" 
                 className="w-full sm:w-auto h-8 rounded-lg text-xs font-semibold gap-2 border-border"
                 onClick={handleToggleAll}
-                disabled={!selectedRoleId}
+                disabled={!selectedUserId}
               >
                 {isAllGlobalSelected ? <X size={12} /> : <CheckSquare size={12} />}
                 {isAllGlobalSelected ? "Deselect All" : "Select Global All"}
@@ -250,7 +256,7 @@ export default function AssignPermissionsPage() {
                       </div>
                       <button
                         onClick={() => handleToggleGroup(perms)}
-                        disabled={!selectedRoleId}
+                        disabled={!selectedUserId}
                         className={`
                           text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded transition-all
                           ${allInGroupSelected 
@@ -270,9 +276,9 @@ export default function AssignPermissionsPage() {
                             key={permission.id}
                             className={`
                               flex items-center gap-2.5 py-1.5 px-2 rounded-md transition-colors select-none group
-                              ${!selectedRoleId ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30"}
+                              ${!selectedUserId ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30"}
                             `}
-                            onClick={() => selectedRoleId && handleTogglePermission(permission.name)}
+                            onClick={() => selectedUserId && handleTogglePermission(permission.name)}
                           >
                             <div className={`
                               flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-all duration-200
@@ -306,7 +312,7 @@ export default function AssignPermissionsPage() {
           <div className="p-3 border-t border-border bg-muted/5 flex justify-end">
             <Button 
               onClick={handleSave} 
-              disabled={!selectedRoleId || saving}
+              disabled={!selectedUserId || saving}
               className="h-9 px-6 rounded-lg font-bold gap-2 shadow-sm hover:shadow-md transition-all text-xs"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
