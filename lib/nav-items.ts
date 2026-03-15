@@ -14,10 +14,12 @@ export type NavItem = {
   label: string;
   icon?: LucideIcon;
   href?: string;
+  permission?: string;
   children?: {
     label: string;
     href: string;
     icon?: LucideIcon;
+    permission?: string;
     divider?: boolean;
     completed?: boolean;
   }[];
@@ -36,6 +38,7 @@ export const navSections: NavSection[] = [
         href: "/dashboard",
         label: "Dashboard",
         icon: LayoutDashboard,
+        permission: "view-dashboard",
       },
     ],
   },
@@ -43,33 +46,39 @@ export const navSections: NavSection[] = [
     title: "Pages",
     items: [
       {
-        href: "/dashboard/merchant",
+        href: "/dashboard/merchants",
         label: "Merchant Management",
         icon: Building2,
+        permission: "manage-users",
       },
       {
         label: "User Management",
         icon: UserCog,
+        permission: "manage-users",
         children: [
           {
             href: "/dashboard/users",
             label: "Users",
             icon: Users,
+            permission: "manage-users",
           },
           {
             href: "/dashboard/roles",
             label: "Roles",
             icon: ShieldCheck,
+            permission: "manage-roles",
           },
           {
             href: "/dashboard/permissions",
             label: "Permissions",
             icon: LockKeyhole,
+            permission: "manage-roles",
           },
           {
             href: "/dashboard/roles/assign-permissions",
             label: "Permissions Assigning",
             icon: KeySquare,
+            permission: "manage-roles",
           },
         ],
       },
