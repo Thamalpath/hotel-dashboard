@@ -4,7 +4,7 @@ import { cn } from "@/utils/cn";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
-import { Sidebar } from "../../components/layout/sidebar";
+import { Sidebar } from "@/components/layout/sidebar";
 
 export default function DashboardLayout({
   children,
