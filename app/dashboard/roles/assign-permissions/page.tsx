@@ -12,7 +12,9 @@ import {
   Loader2, 
   CheckSquare, 
   Check, 
-  X 
+  X,
+  User as UserIcon,
+  Users as UsersIcon
 } from "lucide-react";
 import {
   Select,
@@ -21,11 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/utils/cn";
 
-type User = {
+type TargetType = 'role' | 'user';
+
+type Target = {
   id: number;
   name: string;
-  permissions: Permission[];
 };
 
 type Permission = {
@@ -33,55 +37,60 @@ type Permission = {
   name: string;
 };
 
-// Helper to group permissions into "Dashboard permissions" and "User management"
+// Helper to group permissions into categories
 const groupPermissions = (permissions: Permission[]) => {
   const groups: { [key: string]: Permission[] } = {
     "Dashboard permissions": [],
-    "User management": []
+    "User management": [],
+    "Merchant management": [],
+    "System": []
   };
   
   permissions.forEach(permission => {
     const name = permission.name.toLowerCase();
-    // Keywords for User Management
-    const isUserMgmt = name.includes('user') || 
-                       name.includes('role') || 
-                       name.includes('permission') ||
-                       name.includes('account');
     
-    if (isUserMgmt) {
+    if (name.includes('user') || name.includes('role') || name.includes('permission')) {
       groups["User management"].push(permission);
-    } else {
+    } else if (name.includes('merchant') || name.includes('hotel')) {
+      groups["Merchant management"].push(permission);
+    } else if (name.includes('dashboard') || name.includes('view') || name.includes('show')) {
       groups["Dashboard permissions"].push(permission);
+    } else {
+      groups["System"].push(permission);
     }
   });
   
-  // Filter out groups with no permissions if they happen to be empty
   return Object.fromEntries(Object.entries(groups).filter(([_, perms]) => perms.length > 0));
 };
 
 export default function AssignPermissionsPage() {
   const { toast } = useToast();
   const fetched = useRef(false);
+  const [targetType, setTargetType] = useState<TargetType>('role');
+  const [selectedTargetId, setSelectedTargetId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  
+  const [roles, setRoles] = useState<Target[]>([]);
+  const [users, setUsers] = useState<Target[]>([]);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [rolesRes, permissionsRes] = await Promise.all([
+      const [rolesRes, usersRes, permissionsRes] = await Promise.all([
+        api.get("/admin/roles"),
         api.get("/admin/users"),
         api.get("/admin/all-permissions"),
       ]);
-      setUsers(rolesRes.data.data || rolesRes.data);
+      setRoles(rolesRes.data.data || rolesRes.data);
+      setUsers(usersRes.data.data || usersRes.data);
       setAllPermissions(permissionsRes.data.data || permissionsRes.data);
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to fetch data",
+        description: error.response?.data?.message || "Failed to fetch base data",
         type: "error",
       });
     } finally {
@@ -96,26 +105,38 @@ export default function AssignPermissionsPage() {
     }
   }, [fetchData]);
 
-useEffect(() => {
-  if (selectedUserId) {
-    // Fetch the user's current permissions
-    api.get(`/admin/users/${selectedUserId}`)
-      .then((res) => {
-        const user = res.data.data || res.data;
-        setSelectedPermissions(user.permissions?.map((p: Permission) => p.name) || []);
-      })
-      .catch((error) => {
-        toast({
-          title: "Error",
-          description: "Failed to load user permissions",
-          type: "error",
+  // Handle Fetching Current Permissions for Selected Target
+  useEffect(() => {
+    if (selectedTargetId) {
+      const endpoint = targetType === 'role' 
+        ? `/admin/roles/${selectedTargetId}` 
+        : `/admin/users/${selectedTargetId}`;
+
+      api.get(endpoint)
+        .then((res) => {
+          const data = res.data.data || res.data;
+          
+          if (targetType === 'role') {
+            // For roles, permissions is an array of objects
+            setSelectedPermissions(data.permissions?.map((p: any) => p.name) || []);
+          } else {
+            // For users, it's the structured object, we want 'direct'
+            setSelectedPermissions(data.permissions?.direct || []);
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          toast({
+            title: "Error",
+            description: `Failed to load ${targetType} permissions`,
+            type: "error",
+          });
+          setSelectedPermissions([]);
         });
-        setSelectedPermissions([]);
-      });
-  } else {
-    setSelectedPermissions([]);
-  }
-}, [selectedUserId, toast]);
+    } else {
+      setSelectedPermissions([]);
+    }
+  }, [selectedTargetId, targetType, toast]);
 
   const handleTogglePermission = (permissionName: string) => {
     setSelectedPermissions((prev) =>
@@ -148,20 +169,32 @@ useEffect(() => {
   };
 
   const handleSave = async () => {
-    if (!selectedUserId) return;
+    if (!selectedTargetId) return;
     setSaving(true);
     try {
-      await api.post(`/admin/roles/assign-permissions-to-user/${selectedUserId}`, {  // Changed endpoint
+      const endpoint = targetType === 'role'
+        ? `/admin/roles/${selectedTargetId}/assign-permissions`
+        : `/admin/roles/assign-permissions-to-user/${selectedTargetId}`;
+
+      await api.post(endpoint, {
         permissions: selectedPermissions,
       });
+
       toast({
         title: "Success",
-        description: "Permissions assigned to user successfully",
+        description: `Permissions assigned to ${targetType} successfully`,
         type: "success",
       });
-      setSelectedUserId("");
+      
+      // Clear page state
+      setSelectedTargetId("");
       setSelectedPermissions([]);
     } catch (error: any) {
+      toast({
+        title: "Save Failed",
+        description: error.response?.data?.message || "An error occurred during save",
+        type: "error"
+      });
     } finally {
       setSaving(false);
     }
@@ -169,30 +202,60 @@ useEffect(() => {
 
   const groupedPermissions = groupPermissions(allPermissions);
   const isAllGlobalSelected = allPermissions.length > 0 && selectedPermissions.length === allPermissions.length;
+  const currentTargets = targetType === 'role' ? roles : users;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row items-center justify-between bg-card p-3 rounded-xl border border-border shadow-sm">
-        <div className="flex items-center gap-2">
-          <LockKeyhole className="text-primary h-5 w-5" />
-          <h1 className="text-lg font-bold font-poppins whitespace-nowrap">
-            Assign Permissions
-          </h1>
+      <div className="flex flex-col lg:flex-row items-center justify-between bg-card p-4 rounded-2xl border border-border shadow-sm gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <LockKeyhole className="text-primary h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold font-poppins">Permissions Hub</h1>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+              Manage Role Defaults & User Overrides
+            </p>
+          </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto ml-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+          {/* Target Type Toggle */}
+          <div className="flex bg-muted p-1 rounded-xl w-full sm:w-auto">
+            <button
+              onClick={() => { setTargetType('role'); setSelectedTargetId(""); }}
+              className={cn(
+                "flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all w-full sm:w-auto",
+                targetType === 'role' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <UsersIcon size={16} />
+              Roles
+            </button>
+            <button
+              onClick={() => { setTargetType('user'); setSelectedTargetId(""); }}
+              className={cn(
+                "flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all w-full sm:w-auto",
+                targetType === 'user' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <UserIcon size={16} />
+              Users
+            </button>
+          </div>
+
           <div className="w-full sm:w-[280px]">
-             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="h-10 bg-muted/50 border-transparent hover:border-primary/50 transition-all rounded-lg">
-                  <SelectValue placeholder="Select target user" />
+             <Select value={selectedTargetId} onValueChange={setSelectedTargetId}>
+                <SelectTrigger className="h-11 bg-muted/50 border-transparent hover:border-primary/50 transition-all rounded-xl">
+                  <SelectValue placeholder={`Select target ${targetType}...`} />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
+                  {currentTargets.map((target) => (
+                    <SelectItem key={target.id} value={target.id.toString()}>
                       <div className="flex items-center gap-2">
-                        <ShieldCheck size={14} className="text-primary" />
-                        <span className="font-medium text-sm">{user.name}</span>
+                        {targetType === 'role' ? <ShieldCheck size={14} className="text-primary" /> : <UserIcon size={14} className="text-primary" />}
+                        <span className="font-medium text-sm">{target.name}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -203,21 +266,23 @@ useEffect(() => {
       </div>
 
       {loading ? (
-        <div className="flex h-[300px] w-full items-center justify-center bg-card/50 rounded-xl border border-dashed border-border text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
-          <span className="text-sm font-medium">Loading configuration...</span>
+        <div className="flex h-[400px] w-full flex-col items-center justify-center bg-card/50 rounded-2xl border border-dashed border-border text-muted-foreground">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <span className="text-sm font-bold uppercase tracking-widest">Hydrating permissions matrix...</span>
         </div>
       ) : (
-        <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-          {/* Sub-Header */}
-          <div className="p-3 border-b border-border bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-primary/10 rounded-md">
-                <ShieldCheck className="h-4 w-4 text-primary" />
+        <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+          {/* Action Bar */}
+          <div className="p-4 border-b border-border bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <ShieldCheck className="h-5 w-5 text-primary" />
               </div>
               <div>
-                 <h3 className="font-bold text-sm">Available Permissions</h3>
-                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Configure system access</div>
+                 <h3 className="font-bold text-sm">Target Permissions</h3>
+                 <p className="text-[10px] text-muted-foreground font-bold uppercase">
+                    {targetType === 'role' ? 'Define common role access' : 'Apply specific user overrides'}
+                 </p>
               </div>
             </div>
             
@@ -225,70 +290,77 @@ useEffect(() => {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="w-full sm:w-auto h-8 rounded-lg text-xs font-semibold gap-2 border-border"
+                className="w-full sm:w-auto h-9 rounded-xl text-xs font-bold gap-2 border-border"
                 onClick={handleToggleAll}
-                disabled={!selectedUserId}
+                disabled={!selectedTargetId}
               >
-                {isAllGlobalSelected ? <X size={12} /> : <CheckSquare size={12} />}
+                {isAllGlobalSelected ? <X size={14} /> : <CheckSquare size={14} />}
                 {isAllGlobalSelected ? "Deselect All" : "Select Global All"}
               </Button>
-              <div className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-md whitespace-nowrap border border-primary/20">
-                {selectedPermissions.length} / {allPermissions.length} SELECTED
+              <div className="px-3 py-1.5 bg-primary/10 text-primary text-[10px] font-black rounded-lg whitespace-nowrap border border-primary/20">
+                {selectedPermissions.length} / {allPermissions.length} ACTIVE
               </div>
             </div>
           </div>
 
-          <div className="p-4 sm:p-5">
-            <div className="space-y-8">
+          <div className="p-6">
+            <div className="space-y-10">
               {Object.entries(groupedPermissions).map(([category, perms]) => {
                 const groupNames = perms.map(p => p.name);
                 const allInGroupSelected = groupNames.every(name => selectedPermissions.includes(name));
 
                 return (
-                  <div key={category} className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-border/60 pb-2 px-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-4 bg-primary rounded-full" />
-                        <h4 className="font-bold text-sm tracking-tight text-foreground uppercase">{category}</h4>
-                        <span className="bg-muted px-2 py-0.5 rounded text-[10px] font-bold text-muted-foreground border border-border">
-                          {perms.length} Permissions
+                  <div key={category} className="space-y-5">
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-5 bg-primary rounded-full" />
+                        <h4 className="font-extrabold text-sm tracking-tight text-foreground uppercase">{category}</h4>
+                        <span className="bg-muted px-2 py-0.5 rounded-md text-[10px] font-black text-muted-foreground border border-border">
+                          {perms.length} AVAILABLE
                         </span>
                       </div>
                       <button
                         onClick={() => handleToggleGroup(perms)}
-                        disabled={!selectedUserId}
-                        className={`
-                          text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded transition-all
-                          ${allInGroupSelected 
-                            ? "text-primary bg-primary/10 border border-primary/30" 
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"}
-                        `}
+                        disabled={!selectedTargetId}
+                        className={cn(
+                          "text-[10px] uppercase font-black tracking-widest px-3 py-1.5 rounded-lg transition-all border",
+                          allInGroupSelected 
+                            ? "text-primary bg-primary/10 border-primary/30" 
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"
+                        )}
                       >
-                        {allInGroupSelected ? "Deselect Group" : "Select Group All"}
+                        {allInGroupSelected ? "Deselect Group" : "Select Group"}
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 xxl:grid-cols-6 gap-x-6 gap-y-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xxl:grid-cols-5 gap-4">
                       {perms.map((permission) => {
                         const isSelected = selectedPermissions.includes(permission.name);
                         return (
                           <div
                             key={permission.id}
-                            className={`
-                              flex items-center gap-2.5 py-1.5 px-2 rounded-md transition-colors select-none group
-                              ${!selectedUserId ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted/30"}
-                            `}
-                            onClick={() => selectedUserId && handleTogglePermission(permission.name)}
+                            className={cn(
+                              "flex items-center gap-3 py-3 px-4 rounded-xl transition-all select-none group border",
+                              !selectedTargetId 
+                                ? "opacity-40 cursor-not-allowed border-transparent" 
+                                : isSelected 
+                                  ? "bg-primary/5 border-primary/20 cursor-pointer shadow-sm" 
+                                  : "bg-background border-border hover:border-primary/40 cursor-pointer"
+                            )}
+                            onClick={() => selectedTargetId && handleTogglePermission(permission.name)}
                           >
-                            <div className={`
-                              flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-all duration-200
-                              ${isSelected 
-                                ? "bg-primary border-primary" 
-                                : "border-muted-foreground/30 group-hover:border-primary/50"}
-                            `}>
-                              {isSelected && <Check size={11} className="text-white stroke-[3.5px]" />}
+                            <div className={cn(
+                              "flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300",
+                              isSelected 
+                                ? "bg-primary border-primary rotate-0 scale-100" 
+                                : "border-muted-foreground/30 group-hover:border-primary/50 rotate-[-15deg] scale-95"
+                            )}>
+                              {isSelected && <Check size={12} className="text-white stroke-[4px]" />}
                             </div>
-                            <span className={`text-[13px] truncate transition-colors ${isSelected ? "font-semibold text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>
+                            <span className={cn(
+                              "text-sm transition-colors truncate",
+                              isSelected ? "font-bold text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                            )}>
                               {permission.name}
                             </span>
                           </div>
@@ -300,23 +372,29 @@ useEffect(() => {
               })}
 
               {allPermissions.length === 0 && !loading && (
-                <div className="py-12 flex flex-col items-center justify-center text-center bg-muted/5 rounded-2xl border border-dashed border-border/60">
-                  <LockKeyhole className="h-8 w-8 text-muted-foreground/30 mb-4" />
-                  <h3 className="font-bold text-sm">No permissions found</h3>
+                <div className="py-20 flex flex-col items-center justify-center text-center bg-muted/5 rounded-3xl border border-dashed border-border/60">
+                  <div className="p-4 bg-muted/10 rounded-full mb-4">
+                    <LockKeyhole className="h-10 w-10 text-muted-foreground/30" />
+                  </div>
+                  <h3 className="font-bold text-lg">No permissions cataloged</h3>
+                  <p className="text-sm text-muted-foreground">Verify the database seeders are running properly.</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Footer Save Section */}
-          <div className="p-3 border-t border-border bg-muted/5 flex justify-end">
+          <div className="p-4 border-t border-border bg-muted/5 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground font-medium italic">
+              {targetType === 'user' && "* Setting user permissions acts as an override or extension to their role default."}
+            </p>
             <Button 
               onClick={handleSave} 
-              disabled={!selectedUserId || saving}
-              className="h-9 px-6 rounded-lg font-bold gap-2 shadow-sm hover:shadow-md transition-all text-xs"
+              disabled={!selectedTargetId || saving}
+              className="h-11 px-8 rounded-xl font-black gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+              {saving ? "SAVING CHANGES..." : "SYNC PERMISSIONS"}
             </Button>
           </div>
         </div>
