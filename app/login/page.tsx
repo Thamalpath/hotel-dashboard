@@ -39,9 +39,11 @@ export default function LoginPage() {
       const responseData = response.data.data || response.data;
       const token = responseData.token;
       const user = responseData.user;
+      const permissions = responseData.permissions;
 
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("permissions", JSON.stringify(permissions));
 
       // Optional: set a cookie if you use middleware
       document.cookie = `isLoggedIn=true; path=/`;

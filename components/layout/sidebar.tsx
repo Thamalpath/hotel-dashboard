@@ -1,11 +1,13 @@
 "use client";
+
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { navSections, type NavItem } from "../../lib/nav-items";
 import { cn } from "@/utils/cn";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { usePermissions } from "@/hooks/use-permissions";
+import { navSections, type NavItem } from "../../lib/nav-items";
 
 export function Sidebar({
   open,
@@ -16,6 +18,31 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { hasPermission, loading } = usePermissions();
+
+  const filteredNavSections = useMemo(() => {
+    if (loading) return [];
+
+    return navSections.map(section => ({
+      ...section,
+      items: section.items.filter(item => {
+        // Check top-level item permission
+        if (item.permission && !hasPermission(item.permission)) return false;
+
+        // If it has children, filter them too
+        if (item.children) {
+          item.children = item.children.filter(child => {
+            if (child.permission && !hasPermission(child.permission)) return false;
+            return true;
+          });
+          // Hide parent if all children are filtered out
+          if (item.children.length === 0 && !item.href) return false;
+        }
+
+        return true;
+      })
+    })).filter(section => section.items.length > 0);
+  }, [loading, hasPermission]);
 
   const renderItem = (item: NavItem) => {
     const hasChildren = !!item.children;
@@ -155,7 +182,7 @@ export function Sidebar({
           {/* Navigation */}
           {open && (
             <div className="flex-1 overflow-y-auto">
-              {navSections.map((section, idx) => (
+              {filteredNavSections.map((section, idx) => (
                 <div key={idx} className="mt-2">
                   <div className="px-2 text-xs uppercase tracking-wide text-muted-foreground/60 font-semibold">
                     {section.title}
