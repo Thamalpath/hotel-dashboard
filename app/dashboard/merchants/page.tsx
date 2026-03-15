@@ -58,7 +58,7 @@ export default function MerchantsPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get("/super-admin/merchants");
+      const response = await api.get("/admin/merchants");
       setMerchants(response.data.data);
     } catch (error: any) {
       toast({
@@ -111,7 +111,7 @@ export default function MerchantsPage() {
   const confirmDelete = async () => {
     if (deleteId === null) return;
     try {
-      await api.delete(`/super-admin/merchants/${deleteId}`);
+      await api.delete(`/admin/merchants/${deleteId}`);
       toast({ title: "Success", description: "Merchant deleted successfully", type: "success" });
       fetchData();
     } catch (error: any) {
@@ -130,10 +130,10 @@ export default function MerchantsPage() {
     setSubmitting(true);
     try {
       if (editingMerchant) {
-        await api.put(`/super-admin/merchants/${editingMerchant.id}`, formData);
+        await api.put(`/admin/merchants/${editingMerchant.id}`, formData);
         toast({ title: "Success", description: "Merchant updated successfully", type: "success" });
       } else {
-        await api.post("/super-admin/merchants", formData);
+        await api.post("/admin/merchants", formData);
         toast({ title: "Success", description: "Merchant created successfully", type: "success" });
       }
       setIsSheetOpen(false);
