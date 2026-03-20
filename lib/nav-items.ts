@@ -8,6 +8,7 @@ import {
   KeySquare,
   UserCog,
   LockKeyhole,
+  Layout,
 } from "lucide-react";
 
 export type NavItem = {
@@ -49,6 +50,12 @@ export const navSections: NavSection[] = [
         href: "/dashboard/merchants",
         label: "Merchant Management",
         icon: Building2,
+        permission: "manage-users",
+      },
+      {
+        href: "/dashboard/layout",
+        label: "Website Layout",
+        icon: Layout,
         permission: "manage-users",
       },
       {
