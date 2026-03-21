@@ -53,12 +53,6 @@ export const navSections: NavSection[] = [
         permission: "manage-users",
       },
       {
-        href: "/dashboard/layout",
-        label: "Website Layout",
-        icon: Layout,
-        permission: "manage-users",
-      },
-      {
         label: "User Management",
         icon: UserCog,
         permission: "manage-users",
