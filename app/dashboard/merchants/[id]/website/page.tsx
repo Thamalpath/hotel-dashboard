@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/utils/api";
 import { cn } from "@/utils/cn";
+import { decodeId } from "@/utils/hashid";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,12 +29,18 @@ type PageSection = {
     content: string | null;
     order: number;
     is_visible: boolean;
+    settings?: any;
+    pendingFiles?: Record<string, File>;
+    previewUrls?: Record<string, string>;
 };
 
 export default function WebsiteManagementPage() {
-    const { id } = useParams();
+    const { id: rawId } = useParams();
     const router = useRouter();
     const { toast } = useToast();
+    const fetched = useRef(false);
+    
+    const merchantId = decodeId(rawId as string);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [merchant, setMerchant] = useState<any>(null);
@@ -44,37 +50,72 @@ export default function WebsiteManagementPage() {
     const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
 
     const fetchData = useCallback(async () => {
-        try {
-            setLoading(true);
-            const [merchRes, navRes, secRes] = await Promise.all([
-                api.get(`/admin/merchants/${id}`),
-                api.get(`/admin/merchants/${id}/navigation`),
-                api.get(`/admin/merchants/${id}/sections`)
-            ]);
+        if (!fetched.current) {
+            fetched.current = true;
 
-            setMerchant(merchRes.data.data);
-            setNavItems(navRes.data.data);
-            setSections(secRes.data.data);
-        } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.response?.data?.message || "Failed to fetch website data",
-                type: "error"
-            });
-        } finally {
-            setLoading(false);
+            try {
+                setLoading(true);
+                const [merchRes, navRes, secRes] = await Promise.all([
+                    api.get(`/admin/merchants/${merchantId}`),
+                    api.get(`/admin/merchants/${merchantId}/navigation`),
+                    api.get(`/admin/merchants/${merchantId}/sections`)
+                ]);
+
+                setMerchant(merchRes.data.data);
+                setNavItems(navRes.data.data);
+                setSections(secRes.data.data);
+            } catch (error: any) {
+                toast({
+                    title: "Error",
+                    description: error.response?.data?.message || "Failed to fetch website data",
+                    type: "error"
+                });
+            } finally {
+                setLoading(false);
+            }            
         }
-    }, [id, toast]);
+    }, [merchantId, toast]);
 
     useEffect(() => {
+        if (!merchantId) {
+            toast({ title: "Error", description: "Invalid Merchant URL", type: "error" });
+            router.push('/dashboard/merchants');
+            return;
+        }
         fetchData();
-    }, [fetchData]);
+    }, [fetchData, merchantId, router, toast]);
 
     const handleSaveNavigation = async () => {
         try {
             setSaving(true);
-            await api.post(`/admin/merchants/${id}/navigation`, { items: navItems });
+            
+            const reorderItems = [];
+            for (const item of navItems) {
+                if (item.id) {
+                    await api.put(`/admin/navigation/${item.id}`, {
+                        label: item.label,
+                        url: item.url,
+                        order: item.order,
+                        is_active: item.is_active
+                    });
+                    reorderItems.push({ id: item.id, order: item.order });
+                } else {
+                    const res = await api.post(`/admin/merchants/${merchantId}/navigation`, {
+                        label: item.label,
+                        url: item.url,
+                        order: item.order,
+                        is_active: item.is_active
+                    });
+                    reorderItems.push({ id: res.data.data.id, order: item.order });
+                }
+            }
+
+            if (reorderItems.length > 0) {
+                await api.patch(`/admin/merchants/${merchantId}/navigation/reorder`, { items: reorderItems });
+            }
+
             toast({ title: "Success", description: "Navigation updated successfully", type: "success" });
+            fetchData();
         } catch (error: any) {
             toast({
                 title: "Error",
@@ -89,8 +130,66 @@ export default function WebsiteManagementPage() {
     const handleSaveSections = async () => {
         try {
             setSaving(true);
-            await api.post(`/admin/merchants/${id}/sections`, { sections: sections });
+            
+            const reorderItems = [];
+            for (let i = 0; i < sections.length; i++) {
+                const section = sections[i];
+                const isMultipart = section.pendingFiles && Object.keys(section.pendingFiles).length > 0;
+                
+                if (isMultipart) {
+                    const formData = new FormData();
+                    formData.append('section_name', section.section_name);
+                    if (section.title) formData.append('title', section.title);
+                    if (section.content) formData.append('content', section.content);
+                    formData.append('order', section.order.toString());
+                    formData.append('is_visible', section.is_visible ? '1' : '0');
+                    if (section.settings) formData.append('settings', JSON.stringify(section.settings));
+                    
+                    Object.entries(section.pendingFiles!).forEach(([k, f]) => {
+                        formData.append(`media[${k}]`, f as Blob);
+                    });
+
+                    let savedId = section.id;
+                    if (section.id) {
+                        formData.append('_method', 'PUT');
+                        await api.post(`/admin/sections/${section.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    } else {
+                        const res = await api.post(`/admin/merchants/${merchantId}/sections`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                        savedId = res.data.data.id;
+                    }
+                    reorderItems.push({ id: savedId!, order: section.order });
+                } else {
+                    let savedId = section.id;
+                    if (section.id) {
+                        await api.put(`/admin/sections/${section.id}`, {
+                            section_name: section.section_name,
+                            title: section.title,
+                            content: section.content,
+                            order: section.order,
+                            is_visible: section.is_visible,
+                            settings: section.settings
+                        });
+                    } else {
+                        const res = await api.post(`/admin/merchants/${merchantId}/sections`, {
+                            section_name: section.section_name,
+                            title: section.title,
+                            content: section.content,
+                            order: section.order,
+                            is_visible: section.is_visible,
+                            settings: section.settings
+                        });
+                        savedId = res.data.data.id;
+                    }
+                    reorderItems.push({ id: savedId!, order: section.order });
+                }
+            }
+
+            if (reorderItems.length > 0) {
+                await api.patch(`/admin/merchants/${merchantId}/sections/reorder`, { items: reorderItems });
+            }
+
             toast({ title: "Success", description: "Page sections updated successfully", type: "success" });
+            fetchData();
         } catch (error: any) {
             toast({
                 title: "Error",
@@ -107,7 +206,20 @@ export default function WebsiteManagementPage() {
         setNavItems([...navItems, { label: "New Item", url: "/", order: newOrder, is_active: true }]);
     };
 
-    const removeNavItem = (index: number) => {
+    const removeNavItem = async (index: number) => {
+        const item = navItems[index];
+        if (item.id) {
+            try {
+                await api.delete(`/admin/navigation/${item.id}`);
+            } catch (error: any) {
+                toast({
+                    title: "Error",
+                    description: error.response?.data?.message || "Failed to delete item from server",
+                    type: "error"
+                });
+                return;
+            }
+        }
         setNavItems(navItems.filter((_, i) => i !== index));
     };
 
@@ -139,6 +251,98 @@ export default function WebsiteManagementPage() {
         const updated = [...sections];
         updated[index] = { ...updated[index], [field]: value };
         setSections(updated);
+    };
+
+    const toggleNavItemVisibility = async (index: number) => {
+        const item = navItems[index];
+        const newStatus = !item.is_active;
+        updateNavItem(index, 'is_active', newStatus);
+        
+        if (item.id) {
+            try {
+                await api.patch(`/admin/navigation/${item.id}/toggle`);
+            } catch (error: any) {
+                updateNavItem(index, 'is_active', !newStatus);
+                toast({ title: "Error", description: "Failed to toggle item visibility.", type: "error" });
+            }
+        }
+    };
+
+    const toggleSectionVisibility = async (index: number) => {
+        const section = sections[index];
+        const newStatus = !section.is_visible;
+        updateSection(index, 'is_visible', newStatus);
+
+        if (section.id) {
+            try {
+                await api.patch(`/admin/sections/${section.id}/visibility`);
+            } catch (error: any) {
+                updateSection(index, 'is_visible', !newStatus);
+                toast({ title: "Error", description: "Failed to toggle section visibility.", type: "error" });
+            }
+        }
+    };
+
+    const removeSection = async (index: number) => {
+        const section = sections[index];
+        if (section.id) {
+            try {
+                await api.delete(`/admin/sections/${section.id}`);
+            } catch (error: any) {
+                toast({ title: "Error", description: "Failed to delete section.", type: "error" });
+                return;
+            }
+        }
+        setSections(sections.filter((_, i) => i !== index));
+    };
+
+    const addSection = () => {
+        const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
+        setSections([...sections, { section_name: `custom-section-${newOrder}`, title: "New Section", content: "", order: newOrder, is_visible: true, settings: {} }]);
+    };
+
+    const handleMediaUpload = (index: number, key: string, file: File) => {
+        const localUrl = URL.createObjectURL(file);
+        
+        const updated = [...sections];
+        const section = updated[index];
+        
+        section.pendingFiles = { ...(section.pendingFiles || {}), [key]: file };
+        section.previewUrls = { ...(section.previewUrls || {}), [key]: localUrl };
+        
+        setSections(updated);
+    };
+
+    const handleMediaDelete = async (index: number, key: string) => {
+        const section = sections[index];
+
+        if (section.pendingFiles?.[key]) {
+            const updated = [...sections];
+            
+            const pFiles = { ...updated[index].pendingFiles };
+            delete pFiles[key];
+            updated[index].pendingFiles = pFiles;
+            
+            const pUrls = { ...updated[index].previewUrls };
+            delete pUrls[key];
+            updated[index].previewUrls = pUrls;
+            
+            setSections(updated);
+            return;
+        }
+
+        if (!section.id) return;
+
+        try {
+            await api.delete(`/admin/sections/${section.id}/media/${key}`);
+            toast({ title: "Success", description: "Media deleted successfully.", type: "success" });
+            
+            const newSettings = { ...section.settings };
+            delete newSettings[key];
+            updateSection(index, 'settings', newSettings);
+        } catch (error: any) {
+            toast({ title: "Error", description: error.response?.data?.message || "Failed to delete media.", type: "error" });
+        }
     };
 
     const handleDragStart = (index: number) => {
@@ -242,10 +446,10 @@ export default function WebsiteManagementPage() {
                                 <Plus className="mr-2 h-4 w-4" /> Add Link
                             </Button>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent>
                             {navItems.length === 0 ? (
                                 <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-                                    No navigation items found. Click "Add Link" to start.
+                                    No navigation items found. Click &quot;Add Link&quot; to start.
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -316,7 +520,7 @@ export default function WebsiteManagementPage() {
                                                     variant={item.is_active ? "default" : "outline"} 
                                                     size="icon" 
                                                     className="h-8 w-8"
-                                                    onClick={() => updateNavItem(index, 'is_active', !item.is_active)}
+                                                    onClick={() => toggleNavItemVisibility(index)}
                                                     title={item.is_active ? "Click to deactivate" : "Click to activate"}
                                                 >
                                                     {item.is_active ? <Check size={14} /> : <X size={14} />}
@@ -347,9 +551,14 @@ export default function WebsiteManagementPage() {
                 {/* Page Content Management */}
                 <TabsContent value="sections" className="space-y-4 pt-4">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Page Sections</CardTitle>
-                            <CardDescription>Edit the titles and descriptions of the website sections.</CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Page Sections</CardTitle>
+                                <CardDescription>Edit the titles and descriptions of the website sections.</CardDescription>
+                            </div>
+                            <Button size="sm" onClick={addSection}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Section
+                            </Button>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             {sections.map((section, index) => (
@@ -365,12 +574,22 @@ export default function WebsiteManagementPage() {
                                     )}
                                 >
                                     <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                                        <div className="flex items-center gap-2">
-                                            <GripVertical className="text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing" size={16} />
-                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                                                {section.section_name}
-                                            </Badge>
-                                            <span className="text-xs text-muted-foreground">Order: {section.order}</span>
+                                        <div className="flex flex-row items-center gap-2 whitespace-nowrap">
+                                            <GripVertical
+                                                className="shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing"
+                                                size={16}
+                                            />
+                                            
+                                            <Input 
+                                                value={section.section_name} 
+                                                onChange={(e) => updateSection(index, 'section_name', e.target.value)}
+                                                className="w-48 h-8 text-sm font-mono bg-transparent border-dashed shrink-0"
+                                                placeholder="e.g. hero"
+                                            />
+
+                                            <span className="text-xs text-muted-foreground shrink-0">
+                                                Order: {section.order}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Label className="text-xs mr-1">Visible</Label>
@@ -378,13 +597,21 @@ export default function WebsiteManagementPage() {
                                                 variant={section.is_visible ? "default" : "outline"} 
                                                 size="icon" 
                                                 className="h-7 w-7"
-                                                onClick={() => updateSection(index, 'is_visible', !section.is_visible)}
+                                                onClick={() => toggleSectionVisibility(index)}
                                             >
                                                 {section.is_visible ? <Check size={12} /> : <X size={12} />}
                                             </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                onClick={() => removeSection(index)}
+                                            >
+                                                <Trash2 size={12} />
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-4">
+                                    <div className="grid grid-cols-1 gap-2">
                                         <div className="space-y-2">
                                             <Label>Section Title</Label>
                                             <Input 
@@ -401,6 +628,66 @@ export default function WebsiteManagementPage() {
                                                 onChange={(e) => updateSection(index, 'content', e.target.value)}
                                                 placeholder={`Enter content for ${section.section_name} section`}
                                             />
+                                        </div>
+                                        <div className="space-y-2 border-t border-border/50 pt-2 mt-2">
+                                            <Label>Media (Optional)</Label>
+                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                                {['image', 'banner', 'video', 'background'].map((key) => {
+                                                    const rawMediaUrl = section.settings?.[key];
+                                                    const pendingUrl = section.previewUrls?.[key];
+                                                    
+                                                    let currentMediaUrl = null;
+                                                    if (pendingUrl) {
+                                                        currentMediaUrl = pendingUrl;
+                                                    } else if (rawMediaUrl) {
+                                                        const cleanUrl = rawMediaUrl.startsWith('/') ? rawMediaUrl.substring(1) : rawMediaUrl;
+                                                        currentMediaUrl = rawMediaUrl.startsWith('http') 
+                                                            ? rawMediaUrl 
+                                                            : `${api.defaults.baseURL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${cleanUrl}`;
+                                                    }
+
+                                                    return (
+                                                        <div key={key} className="space-y-2 border border-border p-3 rounded-md relative flex flex-col items-center justify-center min-h-[100px] bg-card">
+                                                            <div className="capitalize text-xs font-semibold text-muted-foreground w-full text-center">{key}</div>
+                                                            {currentMediaUrl ? (
+                                                                <div className="relative group w-full h-20 mt-1 flex items-center justify-center overflow-hidden rounded border border-border">
+                                                                    {key === 'video' ? (
+                                                                        <video src={currentMediaUrl} className="object-cover w-full h-full" muted loop playsInline />
+                                                                    ) : (
+                                                                        <img src={currentMediaUrl} alt={key} className="object-cover w-full h-full" />
+                                                                    )}
+                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                        <Button 
+                                                                            variant="destructive" 
+                                                                            size="icon" 
+                                                                            className="h-8 w-8 rounded-full shadow-sm"
+                                                                            title="Remove Media"
+                                                                            onClick={() => handleMediaDelete(index, key)}
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <label className="cursor-pointer flex flex-col items-center justify-center p-2 rounded-md hover:bg-muted/50 transition-colors w-full h-full">
+                                                                    <Plus size={16} className="text-muted-foreground mb-1" />
+                                                                    <span className="text-[10px] text-muted-foreground">Upload</span>
+                                                                    <input 
+                                                                        type="file" 
+                                                                        className="hidden" 
+                                                                        accept={key === 'video' ? 'video/mp4,video/webm' : 'image/*'} 
+                                                                        onChange={(e) => {
+                                                                            if (e.target.files && e.target.files[0]) {
+                                                                                handleMediaUpload(index, key, e.target.files[0]);
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
