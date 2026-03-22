@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <>
-      <html lang="en" className={poppins.variable} suppressHydrationWarning>
+      <html lang="en" className={poppins.variable}>
         <body className="font-poppins">
           <ThemeProvider>{children}</ThemeProvider>
           <Toaster />
