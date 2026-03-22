@@ -26,10 +26,16 @@ type PageSection = {
     id?: number;
     section_name: string;
     title: string | null;
+    sub_title?: string | null;
     content: string | null;
     order: number;
     is_visible: boolean;
-    settings?: any;
+    image_url?: string | null;
+    video_url?: string | null;
+    banner_url?: string | null;
+    poster_url?: string | null;
+    background_url?: string | null;
+    media_urls?: Record<string, string>;
     pendingFiles?: Record<string, File>;
     previewUrls?: Record<string, string>;
 };
@@ -140,10 +146,10 @@ export default function WebsiteManagementPage() {
                     const formData = new FormData();
                     formData.append('section_name', section.section_name);
                     if (section.title) formData.append('title', section.title);
+                    if (section.sub_title) formData.append('sub_title', section.sub_title);
                     if (section.content) formData.append('content', section.content);
                     formData.append('order', section.order.toString());
                     formData.append('is_visible', section.is_visible ? '1' : '0');
-                    if (section.settings) formData.append('settings', JSON.stringify(section.settings));
                     
                     Object.entries(section.pendingFiles!).forEach(([k, f]) => {
                         formData.append(`media[${k}]`, f as Blob);
@@ -164,19 +170,19 @@ export default function WebsiteManagementPage() {
                         await api.put(`/admin/sections/${section.id}`, {
                             section_name: section.section_name,
                             title: section.title,
+                            sub_title: section.sub_title,
                             content: section.content,
                             order: section.order,
-                            is_visible: section.is_visible,
-                            settings: section.settings
+                            is_visible: section.is_visible
                         });
                     } else {
                         const res = await api.post(`/admin/merchants/${merchantId}/sections`, {
                             section_name: section.section_name,
                             title: section.title,
+                            sub_title: section.sub_title,
                             content: section.content,
                             order: section.order,
-                            is_visible: section.is_visible,
-                            settings: section.settings
+                            is_visible: section.is_visible
                         });
                         savedId = res.data.data.id;
                     }
@@ -298,7 +304,7 @@ export default function WebsiteManagementPage() {
 
     const addSection = () => {
         const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
-        setSections([...sections, { section_name: `custom-section-${newOrder}`, title: "New Section", content: "", order: newOrder, is_visible: true, settings: {} }]);
+        setSections([...sections, { section_name: `custom-section-${newOrder}`, title: "New Section", content: "", order: newOrder, is_visible: true }]);
     };
 
     const handleMediaUpload = (index: number, key: string, file: File) => {
@@ -337,9 +343,9 @@ export default function WebsiteManagementPage() {
             await api.delete(`/admin/sections/${section.id}/media/${key}`);
             toast({ title: "Success", description: "Media deleted successfully.", type: "success" });
             
-            const newSettings = { ...section.settings };
-            delete newSettings[key];
-            updateSection(index, 'settings', newSettings);
+            const newMediaUrls = { ...section.media_urls };
+            delete newMediaUrls[`${key}_url`];
+            updateSection(index, 'media_urls', newMediaUrls);
         } catch (error: any) {
             toast({ title: "Error", description: error.response?.data?.message || "Failed to delete media.", type: "error" });
         }
@@ -621,6 +627,14 @@ export default function WebsiteManagementPage() {
                                             />
                                         </div>
                                         <div className="space-y-2">
+                                            <Label>Section Sub-title</Label>
+                                            <Input 
+                                                value={section.sub_title || ""} 
+                                                onChange={(e) => updateSection(index, 'sub_title', e.target.value)}
+                                                placeholder={`Enter sub-title for ${section.section_name} section`}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
                                             <Label>Section Content / Description</Label>
                                             <Textarea 
                                                 rows={4}
@@ -633,18 +647,10 @@ export default function WebsiteManagementPage() {
                                             <Label>Media (Optional)</Label>
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                                 {['image', 'banner', 'video', 'background'].map((key) => {
-                                                    const rawMediaUrl = section.settings?.[key];
+                                                    const backendUrl = section.media_urls?.[`${key}_url`];
                                                     const pendingUrl = section.previewUrls?.[key];
                                                     
-                                                    let currentMediaUrl = null;
-                                                    if (pendingUrl) {
-                                                        currentMediaUrl = pendingUrl;
-                                                    } else if (rawMediaUrl) {
-                                                        const cleanUrl = rawMediaUrl.startsWith('/') ? rawMediaUrl.substring(1) : rawMediaUrl;
-                                                        currentMediaUrl = rawMediaUrl.startsWith('http') 
-                                                            ? rawMediaUrl 
-                                                            : `${api.defaults.baseURL?.replace('/api/v1', '') || 'http://localhost:8000'}/storage/${cleanUrl}`;
-                                                    }
+                                                    const currentMediaUrl = pendingUrl || backendUrl || null;
 
                                                     return (
                                                         <div key={key} className="space-y-2 border border-border p-3 rounded-md relative flex flex-col items-center justify-center min-h-[100px] bg-card">

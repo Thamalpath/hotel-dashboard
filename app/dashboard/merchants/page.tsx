@@ -245,7 +245,7 @@ export default function MerchantsPage() {
               <Pencil className="mr-2 h-4 w-4 text-blue-500" />
               Edit Details
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleDeleteClick(row.original.id)} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+            <DropdownMenuItem onClick={() => handleDeleteClick(row.original.id)} className="cursor-pointer">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
