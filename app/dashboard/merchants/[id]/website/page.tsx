@@ -12,24 +12,49 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, Plus, Trash2, Save, GripVertical, Check, X, ExternalLink, ChevronUp, ChevronDown } from "lucide-react";
+import { 
+    Select, 
+    SelectContent, 
+    SelectItem, 
+    SelectTrigger, 
+    SelectValue 
+} from "@/components/ui/select";
+import { Loader2, ArrowLeft, Plus, Trash2, Save, GripVertical, Check, X, ExternalLink, ChevronUp, ChevronDown, Layout, FileText, Database, Settings } from "lucide-react";
 
 type NavItem = {
+    _frontendId: string;
     id?: number;
     label: string;
     url: string;
     order: number;
     is_active: boolean;
+    seo?: {
+        meta_title?: string;
+        meta_description?: string;
+        meta_keywords?: string;
+        og_title?: string;
+        og_description?: string;
+        og_image?: string | null;
+        canonical_url?: string;
+        is_indexable?: boolean;
+    };
+    pendingOgImage?: File;
+    previewOgImage?: string;
 };
 
 type PageSection = {
+    _frontendId: string;
     id?: number;
+    navigation_item_id: number | null;
     section_name: string;
     title: string | null;
     sub_title?: string | null;
     content: string | null;
     order: number;
     is_visible: boolean;
+    data_source: string;
+    section_key?: string;
+    settings?: Record<string, any>;
     image_url?: string | null;
     video_url?: string | null;
     banner_url?: string | null;
@@ -53,7 +78,10 @@ export default function WebsiteManagementPage() {
     const [navItems, setNavItems] = useState<NavItem[]>([]);
     const [sections, setSections] = useState<PageSection[]>([]);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
+    const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
+    const [expandedNavIndex, setExpandedNavIndex] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState<string>("navigation");
+    const [selectedNavItemId, setSelectedNavItemId] = useState<number | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!fetched.current) {
@@ -68,8 +96,45 @@ export default function WebsiteManagementPage() {
                 ]);
 
                 setMerchant(merchRes.data.data);
-                setNavItems(navRes.data.data);
-                setSections(secRes.data.data);
+                const navData = (navRes.data.data || []).map((item: any) => ({
+                    ...item,
+                    _frontendId: item.id ? `nav-${item.id}` : Math.random().toString(36).substring(7)
+                }));
+                setNavItems(navData);
+                
+                const sectionsData = secRes.data.data;
+                const sectionsWithContents = await Promise.all(
+                    sectionsData.map(async (sec: any) => {
+                        try {
+                            const contentRes = await api.get(`/admin/sections/${sec.id}/contents`);
+                            const contents = contentRes.data.data;
+                            const contentMap: Record<string, any> = {};
+                            const mediaUrls: Record<string, string> = {};
+                            
+                            contents.forEach((c: any) => {
+                                if (c.type === 'image' || c.type === 'video') {
+                                    mediaUrls[`${c.field_key}_url`] = c.url;
+                                } else {
+                                    contentMap[c.field_key] = c.field_value;
+                                }
+                            });
+
+                            return {
+                                ...sec,
+                                _frontendId: Math.random().toString(36).substring(7),
+                                data_source: sec.data_source || 'static',
+                                title: contentMap.title || "",
+                                sub_title: contentMap.sub_title || "",
+                                content: contentMap.content || "",
+                                media_urls: mediaUrls
+                            };
+                        } catch (err) {
+                            return sec;
+                        }
+                    })
+                );
+                
+                setSections(sectionsWithContents);
             } catch (error: any) {
                 toast({
                     title: "Error",
@@ -97,22 +162,36 @@ export default function WebsiteManagementPage() {
             
             const reorderItems = [];
             for (const item of navItems) {
+                let savedId = item.id;
+                const payload = {
+                    label: item.label,
+                    url: item.url,
+                    order: item.order,
+                    is_active: item.is_active,
+                    meta_title: item.seo?.meta_title,
+                    meta_description: item.seo?.meta_description,
+                    meta_keywords: item.seo?.meta_keywords,
+                    og_title: item.seo?.og_title,
+                    og_description: item.seo?.og_description,
+                    canonical_url: item.seo?.canonical_url,
+                    is_indexable: item.seo?.is_indexable !== undefined ? item.seo.is_indexable : true
+                };
+
                 if (item.id) {
-                    await api.put(`/admin/navigation/${item.id}`, {
-                        label: item.label,
-                        url: item.url,
-                        order: item.order,
-                        is_active: item.is_active
-                    });
-                    reorderItems.push({ id: item.id, order: item.order });
+                    await api.put(`/admin/navigation/${item.id}`, payload);
                 } else {
-                    const res = await api.post(`/admin/merchants/${merchantId}/navigation`, {
-                        label: item.label,
-                        url: item.url,
-                        order: item.order,
-                        is_active: item.is_active
+                    const res = await api.post(`/admin/merchants/${merchantId}/navigation`, payload);
+                    savedId = res.data.data.id;
+                }
+                
+                reorderItems.push({ id: savedId!, order: item.order });
+
+                if (item.pendingOgImage && savedId) {
+                    const formData = new FormData();
+                    formData.append('og_image', item.pendingOgImage);
+                    await api.post(`/admin/navigation/${savedId}/og-image`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
                     });
-                    reorderItems.push({ id: res.data.data.id, order: item.order });
                 }
             }
 
@@ -136,65 +215,64 @@ export default function WebsiteManagementPage() {
     const handleSaveSections = async () => {
         try {
             setSaving(true);
-            
+            const displaySections = sections.filter(s => s.navigation_item_id === selectedNavItemId);
             const reorderItems = [];
-            for (let i = 0; i < sections.length; i++) {
-                const section = sections[i];
-                const isMultipart = section.pendingFiles && Object.keys(section.pendingFiles).length > 0;
-                
-                if (isMultipart) {
-                    const formData = new FormData();
-                    formData.append('section_name', section.section_name);
-                    if (section.title) formData.append('title', section.title);
-                    if (section.sub_title) formData.append('sub_title', section.sub_title);
-                    if (section.content) formData.append('content', section.content);
-                    formData.append('order', section.order.toString());
-                    formData.append('is_visible', section.is_visible ? '1' : '0');
-                    
-                    Object.entries(section.pendingFiles!).forEach(([k, f]) => {
-                        formData.append(`media[${k}]`, f as Blob);
-                    });
 
-                    let savedId = section.id;
-                    if (section.id) {
-                        formData.append('_method', 'PUT');
-                        await api.post(`/admin/sections/${section.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-                    } else {
-                        const res = await api.post(`/admin/merchants/${merchantId}/sections`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-                        savedId = res.data.data.id;
-                    }
-                    reorderItems.push({ id: savedId!, order: section.order });
+            for (const section of displaySections) {
+                let savedId = section.id;
+                
+                // 1. Save or Update Section basic info
+                if (section.id) {
+                    await api.put(`/admin/sections/${section.id}`, {
+                        section_name: section.section_name,
+                        data_source: section.data_source,
+                        order: section.order,
+                        is_visible: section.is_visible,
+                        navigation_item_id: section.navigation_item_id,
+                        settings: section.settings
+                    });
                 } else {
-                    let savedId = section.id;
-                    if (section.id) {
-                        await api.put(`/admin/sections/${section.id}`, {
-                            section_name: section.section_name,
-                            title: section.title,
-                            sub_title: section.sub_title,
-                            content: section.content,
-                            order: section.order,
-                            is_visible: section.is_visible
-                        });
-                    } else {
-                        const res = await api.post(`/admin/merchants/${merchantId}/sections`, {
-                            section_name: section.section_name,
-                            title: section.title,
-                            sub_title: section.sub_title,
-                            content: section.content,
-                            order: section.order,
-                            is_visible: section.is_visible
-                        });
-                        savedId = res.data.data.id;
-                    }
-                    reorderItems.push({ id: savedId!, order: section.order });
+                    const res = await api.post(`/admin/merchants/${merchantId}/sections`, {
+                        section_name: section.section_name,
+                        data_source: section.data_source,
+                        order: section.order,
+                        is_visible: section.is_visible,
+                        navigation_item_id: section.navigation_item_id,
+                        settings: section.settings
+                    });
+                    savedId = res.data.data.id;
                 }
+                
+                // 2. Update Contents
+                await api.put(`/admin/sections/${savedId}/contents`, {
+                    fields: {
+                        title: section.title || "",
+                        sub_title: section.sub_title || "",
+                        content: section.content || ""
+                    }
+                });
+
+                // 3. Upload Pending Files
+                if (section.pendingFiles && Object.keys(section.pendingFiles).length > 0) {
+                    for (const [key, file] of Object.entries(section.pendingFiles)) {
+                        const formData = new FormData();
+                        formData.append('key', key);
+                        formData.append('file', file);
+                        await api.post(`/admin/sections/${savedId}/contents/media`, formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                    }
+                }
+                
+                reorderItems.push({ id: savedId!, order: section.order });
             }
 
             if (reorderItems.length > 0) {
                 await api.patch(`/admin/merchants/${merchantId}/sections/reorder`, { items: reorderItems });
             }
 
-            toast({ title: "Success", description: "Page sections updated successfully", type: "success" });
+            toast({ title: "Success", description: "Page sections saved successfully", type: "success" });
+            fetched.current = false;
             fetchData();
         } catch (error: any) {
             toast({
@@ -209,7 +287,16 @@ export default function WebsiteManagementPage() {
 
     const addNavItem = () => {
         const newOrder = navItems.length > 0 ? Math.max(...navItems.map(i => i.order)) + 1 : 1;
-        setNavItems([...navItems, { label: "New Item", url: "/", order: newOrder, is_active: true }]);
+        setNavItems([
+            ...navItems, 
+            { 
+                _frontendId: Math.random().toString(36).substring(7),
+                label: "New Item", 
+                url: "/", 
+                order: newOrder, 
+                is_active: true 
+            }
+        ]);
     };
 
     const removeNavItem = async (index: number) => {
@@ -235,6 +322,54 @@ export default function WebsiteManagementPage() {
         setNavItems(updated);
     };
 
+    const updateNavSeo = (index: number, field: string, value: any) => {
+        const updated = [...navItems];
+        if (!updated[index].seo) updated[index].seo = {};
+        updated[index].seo![field as keyof NonNullable<NavItem['seo']>] = value;
+        setNavItems(updated);
+    };
+
+    const handleNavOgUpload = (index: number, file: File) => {
+        // Validation: OG Images max 5MB
+        if (file.size > 5 * 1024 * 1024) {
+            toast({
+                title: "Image too large",
+                description: "OG image must be smaller than 5MB.",
+                type: "error"
+            });
+            return;
+        }
+
+        const localUrl = URL.createObjectURL(file);
+        const updated = [...navItems];
+        updated[index].pendingOgImage = file;
+        updated[index].previewOgImage = localUrl;
+        setNavItems(updated);
+    };
+
+    const handleNavOgDelete = async (index: number) => {
+        const item = navItems[index];
+        if (item.pendingOgImage) {
+            const updated = [...navItems];
+            delete updated[index].pendingOgImage;
+            delete updated[index].previewOgImage;
+            setNavItems(updated);
+            return;
+        }
+
+        if (item.id && item.seo?.og_image) {
+            try {
+                await api.delete(`/admin/navigation/${item.id}/og-image`);
+                toast({ title: "Success", description: "OG image deleted.", type: "success" });
+                const updated = [...navItems];
+                updated[index].seo!.og_image = null;
+                setNavItems(updated);
+            } catch (error: any) {
+                toast({ title: "Error", description: "Failed to delete OG image.", type: "error" });
+            }
+        }
+    };
+
     const moveNavItem = (index: number, direction: 'up' | 'down') => {
         if (direction === 'up' && index === 0) return;
         if (direction === 'down' && index === navItems.length - 1) return;
@@ -253,10 +388,8 @@ export default function WebsiteManagementPage() {
         setNavItems(reordered);
     };
 
-    const updateSection = (index: number, field: keyof PageSection, value: any) => {
-        const updated = [...sections];
-        updated[index] = { ...updated[index], [field]: value };
-        setSections(updated);
+    const updateSection = (frontendId: string, field: keyof PageSection, value: any) => {
+        setSections(prev => prev.map(s => s._frontendId === frontendId ? { ...s, [field]: value } : s));
     };
 
     const toggleNavItemVisibility = async (index: number) => {
@@ -274,23 +407,25 @@ export default function WebsiteManagementPage() {
         }
     };
 
-    const toggleSectionVisibility = async (index: number) => {
-        const section = sections[index];
+    const toggleSectionVisibility = async (frontendId: string) => {
+        const section = sections.find(s => s._frontendId === frontendId);
+        if (!section) return;
         const newStatus = !section.is_visible;
-        updateSection(index, 'is_visible', newStatus);
+        updateSection(frontendId, 'is_visible', newStatus);
 
         if (section.id) {
             try {
                 await api.patch(`/admin/sections/${section.id}/visibility`);
             } catch (error: any) {
-                updateSection(index, 'is_visible', !newStatus);
+                updateSection(frontendId, 'is_visible', !newStatus);
                 toast({ title: "Error", description: "Failed to toggle section visibility.", type: "error" });
             }
         }
     };
 
-    const removeSection = async (index: number) => {
-        const section = sections[index];
+    const removeSection = async (frontendId: string) => {
+        const section = sections.find(s => s._frontendId === frontendId);
+        if (!section) return;
         if (section.id) {
             try {
                 await api.delete(`/admin/sections/${section.id}`);
@@ -299,53 +434,83 @@ export default function WebsiteManagementPage() {
                 return;
             }
         }
-        setSections(sections.filter((_, i) => i !== index));
+        setSections(prev => prev.filter(s => s._frontendId !== frontendId));
     };
 
-    const addSection = () => {
-        const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
-        setSections([...sections, { section_name: `custom-section-${newOrder}`, title: "New Section", content: "", order: newOrder, is_visible: true }]);
+    const addSection = (navItemId: number) => {
+        const displaySections = sections.filter(s => s.navigation_item_id === navItemId);
+        const newOrder = displaySections.length > 0 ? Math.max(...displaySections.map(s => s.order)) + 1 : 1;
+        setSections([...sections, { 
+            _frontendId: Math.random().toString(36).substring(7),
+            navigation_item_id: navItemId,
+            section_name: `hero`, 
+            data_source: 'static',
+            title: "New Section", 
+            content: "", 
+            order: newOrder, 
+            is_visible: true 
+        }]);
     };
 
-    const handleMediaUpload = (index: number, key: string, file: File) => {
+    const handleMediaUpload = (frontendId: string, key: string, file: File) => {
+        // Validation: Images max 5MB, Videos max 10MB
+        const isVideo = file.type.startsWith('video/');
+        const maxSize = isVideo ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+        
+        if (file.size > maxSize) {
+            toast({
+                title: "File too large",
+                description: `${isVideo ? 'Video' : 'Image'} must be smaller than ${isVideo ? '10MB' : '5MB'}.`,
+                type: "error"
+            });
+            return;
+        }
+
         const localUrl = URL.createObjectURL(file);
-        
-        const updated = [...sections];
-        const section = updated[index];
-        
-        section.pendingFiles = { ...(section.pendingFiles || {}), [key]: file };
-        section.previewUrls = { ...(section.previewUrls || {}), [key]: localUrl };
-        
-        setSections(updated);
+        setSections(prev => prev.map(section => {
+            if (section._frontendId === frontendId) {
+                return {
+                    ...section,
+                    pendingFiles: { ...(section.pendingFiles || {}), [key]: file },
+                    previewUrls: { ...(section.previewUrls || {}), [key]: localUrl }
+                };
+            }
+            return section;
+        }));
     };
 
-    const handleMediaDelete = async (index: number, key: string) => {
-        const section = sections[index];
+    const handleMediaDelete = async (frontendId: string, key: string) => {
+        const section = sections.find(s => s._frontendId === frontendId);
+        if (!section) return;
 
         if (section.pendingFiles?.[key]) {
-            const updated = [...sections];
-            
-            const pFiles = { ...updated[index].pendingFiles };
-            delete pFiles[key];
-            updated[index].pendingFiles = pFiles;
-            
-            const pUrls = { ...updated[index].previewUrls };
-            delete pUrls[key];
-            updated[index].previewUrls = pUrls;
-            
-            setSections(updated);
+            setSections(prev => prev.map(s => {
+                if (s._frontendId === frontendId) {
+                    const pFiles = { ...s.pendingFiles };
+                    delete pFiles[key];
+                    const pUrls = { ...s.previewUrls };
+                    delete pUrls[key];
+                    return { ...s, pendingFiles: pFiles, previewUrls: pUrls };
+                }
+                return s;
+            }));
             return;
         }
 
         if (!section.id) return;
 
         try {
-            await api.delete(`/admin/sections/${section.id}/media/${key}`);
+            await api.delete(`/admin/sections/${section.id}/contents/media/${key}`);
             toast({ title: "Success", description: "Media deleted successfully.", type: "success" });
             
-            const newMediaUrls = { ...section.media_urls };
-            delete newMediaUrls[`${key}_url`];
-            updateSection(index, 'media_urls', newMediaUrls);
+            setSections(prev => prev.map(s => {
+                if (s._frontendId === frontendId) {
+                    const newMediaUrls = { ...s.media_urls };
+                    delete newMediaUrls[`${key}_url`];
+                    return { ...s, media_urls: newMediaUrls };
+                }
+                return s;
+            }));
         } catch (error: any) {
             toast({ title: "Error", description: error.response?.data?.message || "Failed to delete media.", type: "error" });
         }
@@ -360,12 +525,14 @@ export default function WebsiteManagementPage() {
         if (draggedIndex === null || draggedIndex === index) return;
         
         // Dynamic reordering while dragging for better UX
-        const updated = [...navItems];
-        const item = updated[draggedIndex];
-        updated.splice(draggedIndex, 1);
-        updated.splice(index, 0, item);
-        
-        setNavItems(updated);
+        // We only move if the index is actually different to avoid rapid flickering
+        setNavItems(prev => {
+            const updated = [...prev];
+            const item = updated[draggedIndex];
+            updated.splice(draggedIndex, 1);
+            updated.splice(index, 0, item);
+            return updated;
+        });
         setDraggedIndex(index);
     };
 
@@ -379,30 +546,38 @@ export default function WebsiteManagementPage() {
         setDraggedIndex(null);
     };
 
-    const handleSectionDragStart = (index: number) => {
-        setDraggedSectionIndex(index);
+    const handleSectionDragStart = (frontendId: string) => {
+        setDraggedSectionId(frontendId);
     };
 
-    const handleSectionDragOver = (e: React.DragEvent, index: number) => {
+    const handleSectionDragOver = (e: React.DragEvent, targetId: string) => {
         e.preventDefault();
-        if (draggedSectionIndex === null || draggedSectionIndex === index) return;
+        if (!draggedSectionId || draggedSectionId === targetId) return;
         
-        const updated = [...sections];
-        const item = updated[draggedSectionIndex];
-        updated.splice(draggedSectionIndex, 1);
-        updated.splice(index, 0, item);
+        const filtered = sections.filter(s => s.navigation_item_id === selectedNavItemId);
+        const dragIndex = filtered.findIndex(s => s._frontendId === draggedSectionId);
+        const dropIndex = filtered.findIndex(s => s._frontendId === targetId);
         
-        setSections(updated);
-        setDraggedSectionIndex(index);
+        if (dragIndex === -1 || dropIndex === -1) return;
+        
+        const item = filtered[dragIndex];
+        filtered.splice(dragIndex, 1);
+        filtered.splice(dropIndex, 0, item);
+        
+        setSections(prev => {
+            const others = prev.filter(s => s.navigation_item_id !== selectedNavItemId);
+            return [...others, ...filtered];
+        });
     };
 
     const handleSectionDrop = () => {
-        const reordered = sections.map((section, idx) => ({
-            ...section,
-            order: idx + 1
-        }));
-        setSections(reordered);
-        setDraggedSectionIndex(null);
+        setSections(prev => {
+            const filtered = prev.filter(s => s.navigation_item_id === selectedNavItemId);
+            const others = prev.filter(s => s.navigation_item_id !== selectedNavItemId);
+            const reordered = filtered.map((s, idx) => ({ ...s, order: idx + 1 }));
+            return [...others, ...reordered];
+        });
+        setDraggedSectionId(null);
     };
 
     if (loading) {
@@ -434,7 +609,7 @@ export default function WebsiteManagementPage() {
                 )}
             </div>
 
-            <Tabs defaultValue="navigation" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
                     <TabsTrigger value="navigation">Navigation Menu</TabsTrigger>
                     <TabsTrigger value="sections">Page Content</TabsTrigger>
@@ -460,18 +635,18 @@ export default function WebsiteManagementPage() {
                             ) : (
                                 <div className="space-y-3">
                                     {navItems.map((item, index) => (
-                                        <div 
-                                            key={index} 
-                                            draggable 
-                                            onDragStart={() => handleDragStart(index)}
-                                            onDragOver={(e) => handleDragOver(e, index)}
-                                            onDrop={handleDrop}
-                                            className={cn(
-                                                "flex items-center gap-3 bg-card p-3 rounded-lg border border-border shadow-sm group transition-all duration-200",
-                                                draggedIndex === index && "opacity-50 border-primary border-dashed scale-[0.98] rotate-1"
-                                            )}
-                                        >
-                                            <GripVertical className="text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing" size={18} />
+                                        <div key={item._frontendId} className="space-y-2">
+                                            <div 
+                                                draggable 
+                                                onDragStart={() => handleDragStart(index)}
+                                                onDragOver={(e) => handleDragOver(e, index)}
+                                                onDrop={handleDrop}
+                                                className={cn(
+                                                    "flex items-center gap-3 bg-card p-3 rounded-lg border border-border shadow-sm group transition-all duration-200",
+                                                    draggedIndex === index && "opacity-50 border-primary border-dashed scale-[0.98] rotate-1"
+                                                )}
+                                            >
+                                                <GripVertical className="text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing" size={18} />
                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 flex-1">
                                                 <div className="space-y-1">
                                                     <Label className="text-[10px] uppercase text-muted-foreground">Label</Label>
@@ -500,6 +675,17 @@ export default function WebsiteManagementPage() {
                                                         className="h-8 text-sm"
                                                     />
                                                 </div>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6"
+                                                    onClick={() => setExpandedNavIndex(expandedNavIndex === index ? null : index)}
+                                                    title="SEO Settings"
+                                                >
+                                                    <ChevronDown className={cn("transition-transform duration-200", expandedNavIndex === index ? "rotate-180" : "")} size={14} />
+                                                </Button>
                                             </div>
                                             <div className="flex flex-col gap-1">
                                                 <Button 
@@ -539,7 +725,89 @@ export default function WebsiteManagementPage() {
                                                 >
                                                     <Trash2 size={14} />
                                                 </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="icon" 
+                                                    className="ml-2 h-8 w-8"
+                                                    title="Manage Page Content"
+                                                    onClick={() => {
+                                                        if (!item.id) {
+                                                            toast({ title: "Save Required", description: "Please save the navigation menu first to edit its page content.", type: "warning" });
+                                                            return;
+                                                        }
+                                                        setSelectedNavItemId(item.id);
+                                                        setActiveTab('sections');
+                                                    }}
+                                                >
+                                                    <Layout size={14} />
+                                                </Button>
                                             </div>
+                                        </div>
+                                        
+                                        {expandedNavIndex === index && (
+                                            <div className="bg-muted/30 p-4 rounded-lg border border-border mt-[-8px] mb-4 space-y-4">
+                                                <h4 className="text-sm font-semibold border-b pb-2">SEO & Social Sharing</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Meta Title</Label>
+                                                        <Input value={item.seo?.meta_title || ""} onChange={(e) => updateNavSeo(index, 'meta_title', e.target.value)} placeholder="Max 60 chars" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">OG Title</Label>
+                                                        <Input value={item.seo?.og_title || ""} onChange={(e) => updateNavSeo(index, 'og_title', e.target.value)} placeholder="Title for social preview" />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Meta Description</Label>
+                                                        <Textarea className="h-20" value={item.seo?.meta_description || ""} onChange={(e) => updateNavSeo(index, 'meta_description', e.target.value)} placeholder="Max 160 chars" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">OG Description</Label>
+                                                        <Textarea className="h-20" value={item.seo?.og_description || ""} onChange={(e) => updateNavSeo(index, 'og_description', e.target.value)} placeholder="Desc for social preview" />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Meta Keywords</Label>
+                                                        <Input value={item.seo?.meta_keywords || ""} onChange={(e) => updateNavSeo(index, 'meta_keywords', e.target.value)} placeholder="e.g. hotel, luxury, rooms" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Canonical URL</Label>
+                                                        <Input value={item.seo?.canonical_url || ""} onChange={(e) => updateNavSeo(index, 'canonical_url', e.target.value)} placeholder="https://..." />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">OG Image (1200x627px recommended)</Label>
+                                                    <div className="flex items-center gap-4">
+                                                        {(item.previewOgImage || item.seo?.og_image) ? (
+                                                            <div className="relative group w-32 h-20 rounded border overflow-hidden">
+                                                                <img src={item.previewOgImage || item.seo?.og_image || ""} alt="OG Preview" className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleNavOgDelete(index)}>
+                                                                        <Trash2 size={14} />
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <label className="cursor-pointer flex flex-col items-center justify-center w-32 h-20 border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors">
+                                                                <Plus size={20} className="text-muted-foreground mb-1" />
+                                                                <span className="text-xs text-muted-foreground">Upload</span>
+                                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                                                                    if (e.target.files && e.target.files[0]) handleNavOgUpload(index, e.target.files[0]);
+                                                                }} />
+                                                            </label>
+                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                            <Label className="text-xs">Indexable by Search Engines?</Label>
+                                                            <Button variant={item.seo?.is_indexable !== false ? "default" : "outline"} size="icon" className="h-6 w-6" onClick={() => updateNavSeo(index, 'is_indexable', item.seo?.is_indexable === false)}>
+                                                                {item.seo?.is_indexable !== false ? <Check size={12} /> : <X size={12} />}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         </div>
                                     ))}
                                 </div>
@@ -556,44 +824,102 @@ export default function WebsiteManagementPage() {
 
                 {/* Page Content Management */}
                 <TabsContent value="sections" className="space-y-4 pt-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Page Sections</CardTitle>
-                                <CardDescription>Edit the titles and descriptions of the website sections.</CardDescription>
-                            </div>
-                            <Button size="sm" onClick={addSection}>
-                                <Plus className="mr-2 h-4 w-4" /> Add Section
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {sections.map((section, index) => (
-                                <div 
-                                    key={section.section_name} 
-                                    draggable
-                                    onDragStart={() => handleSectionDragStart(index)}
-                                    onDragOver={(e) => handleSectionDragOver(e, index)}
-                                    onDrop={handleSectionDrop}
-                                    className={cn(
-                                        "space-y-4 p-4 rounded-xl border border-border bg-muted/30 transition-all duration-200",
-                                        draggedSectionIndex === index && "opacity-50 border-primary border-dashed scale-[0.98] rotate-1"
-                                    )}
-                                >
-                                    <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                                        <div className="flex flex-row items-center gap-2 whitespace-nowrap">
-                                            <GripVertical
-                                                className="shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing"
-                                                size={16}
-                                            />
-                                            
-                                            <Input 
-                                                value={section.section_name} 
-                                                onChange={(e) => updateSection(index, 'section_name', e.target.value)}
-                                                className="w-48 h-8 text-sm font-mono bg-transparent border-dashed shrink-0"
-                                                placeholder="e.g. hero"
-                                            />
+                    {!selectedNavItemId ? (
+                        <Card>
+                            <CardContent className="flex flex-col items-center justify-center min-h-[300px] py-10">
+                                <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                                <h3 className="text-xl font-bold">Select a Navigation Link</h3>
+                                <p className="text-muted-foreground text-sm text-center max-w-md mt-2">
+                                    Page content is organized by Navigation Links. Please go to the Navigation Menu tab, select a link, and click &quot;Page Content&quot; to manage its sections.
+                                </p>
+                                <Button className="mt-6" variant="default" onClick={() => setActiveTab('navigation')}>
+                                    <ArrowLeft className="mr-2 h-4 w-4" /> Go to Navigation Menu
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2" onClick={() => setActiveTab('navigation')}>
+                                            <ArrowLeft className="h-4 w-4" />
+                                        </Button>
+                                        <CardTitle>Page Content</CardTitle>
+                                    </div>
+                                    <CardDescription className="ml-10">
+                                        Managing sections for: <span className="font-bold text-foreground underline decoration-primary/30 underline-offset-4">{navItems.find(n => n.id === selectedNavItemId)?.label || "Selected Page"}</span> 
+                                        <span className="text-muted-foreground ml-2">(slug: /{navItems.find(n => n.id === selectedNavItemId)?.url?.replace(/^\//, '') || "home"})</span>
+                                    </CardDescription>
+                                </div>
+                                <Button size="sm" onClick={() => addSection(selectedNavItemId)}>
+                                    <Plus className="mr-2 h-4 w-4" /> Add Section
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {sections.filter(s => s.navigation_item_id === selectedNavItemId).map((section, index) => (
+                                    <div 
+                                        key={section._frontendId} 
+                                        draggable
+                                        onDragStart={() => handleSectionDragStart(section._frontendId)}
+                                        onDragOver={(e) => handleSectionDragOver(e, section._frontendId)}
+                                        onDrop={handleSectionDrop}
+                                        className={cn(
+                                            "space-y-4 p-4 rounded-xl border border-border bg-muted/30 transition-all duration-200",
+                                            draggedSectionId === section._frontendId && "opacity-50 border-primary border-dashed scale-[0.98] rotate-1"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                                            <div className="flex flex-row items-center gap-2 whitespace-nowrap">
+                                                <GripVertical
+                                                    className="shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing"
+                                                    size={16}
+                                                />
+                                                
+                                                <div className="flex flex-col gap-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Section Type</Label>
+                                                    <Select 
+                                                        value={section.section_name} 
+                                                        onValueChange={(val) => updateSection(section._frontendId, 'section_name', val)}
+                                                    >
+                                                        <SelectTrigger className="w-48 h-8 text-sm bg-transparent border-dashed shrink-0">
+                                                            <SelectValue placeholder="Pick Type" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="hero">Hero Header (Large)</SelectItem>
+                                                            <SelectItem value="experience">Experience / About Us</SelectItem>
+                                                            <SelectItem value="featured_rooms">Rooms Showcase</SelectItem>
+                                                            <SelectItem value="dining">Dining / Menu</SelectItem>
+                                                            <SelectItem value="testimonials">Testimonials Bar</SelectItem>
+                                                            <SelectItem value="booking_banner">Booking / CTA Banner</SelectItem>
+                                                            <SelectItem value="gallery">Photo Gallery</SelectItem>
+                                                            <SelectItem value="standard">Standard Content (Generic)</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
 
-                                            <span className="text-xs text-muted-foreground shrink-0">
+                                                <div className="flex flex-col gap-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Data Source</Label>
+                                                    <Select 
+                                                        value={section.data_source} 
+                                                        onValueChange={(val) => {
+                                                            updateSection(section._frontendId, 'data_source', val);
+                                                            if (val === 'rooms') {
+                                                                updateSection(section._frontendId, 'section_name', 'featured_rooms');
+                                                            }
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="w-32 h-8 text-sm bg-transparent border-dashed shrink-0">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="static">Static Text/Media</SelectItem>
+                                                            <SelectItem value="rooms">Dynamic: Rooms</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                            <span className="text-xs text-muted-foreground shrink-0 mt-4">
                                                 Order: {section.order}
                                             </span>
                                         </div>
@@ -603,7 +929,7 @@ export default function WebsiteManagementPage() {
                                                 variant={section.is_visible ? "default" : "outline"} 
                                                 size="icon" 
                                                 className="h-7 w-7"
-                                                onClick={() => toggleSectionVisibility(index)}
+                                                onClick={() => toggleSectionVisibility(section._frontendId)}
                                             >
                                                 {section.is_visible ? <Check size={12} /> : <X size={12} />}
                                             </Button>
@@ -611,7 +937,7 @@ export default function WebsiteManagementPage() {
                                                 variant="ghost" 
                                                 size="icon" 
                                                 className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                onClick={() => removeSection(index)}
+                                                onClick={() => removeSection(section._frontendId)}
                                             >
                                                 <Trash2 size={12} />
                                             </Button>
@@ -622,7 +948,7 @@ export default function WebsiteManagementPage() {
                                             <Label>Section Title</Label>
                                             <Input 
                                                 value={section.title || ""} 
-                                                onChange={(e) => updateSection(index, 'title', e.target.value)}
+                                                onChange={(e) => updateSection(section._frontendId, 'title', e.target.value)}
                                                 placeholder={`Enter title for ${section.section_name} section`}
                                             />
                                         </div>
@@ -630,7 +956,7 @@ export default function WebsiteManagementPage() {
                                             <Label>Section Sub-title</Label>
                                             <Input 
                                                 value={section.sub_title || ""} 
-                                                onChange={(e) => updateSection(index, 'sub_title', e.target.value)}
+                                                onChange={(e) => updateSection(section._frontendId, 'sub_title', e.target.value)}
                                                 placeholder={`Enter sub-title for ${section.section_name} section`}
                                             />
                                         </div>
@@ -639,7 +965,7 @@ export default function WebsiteManagementPage() {
                                             <Textarea 
                                                 rows={4}
                                                 value={section.content || ""} 
-                                                onChange={(e) => updateSection(index, 'content', e.target.value)}
+                                                onChange={(e) => updateSection(section._frontendId, 'content', e.target.value)}
                                                 placeholder={`Enter content for ${section.section_name} section`}
                                             />
                                         </div>
@@ -668,7 +994,7 @@ export default function WebsiteManagementPage() {
                                                                             size="icon" 
                                                                             className="h-8 w-8 rounded-full shadow-sm"
                                                                             title="Remove Media"
-                                                                            onClick={() => handleMediaDelete(index, key)}
+                                                                            onClick={() => handleMediaDelete(section._frontendId, key)}
                                                                         >
                                                                             <Trash2 size={14} />
                                                                         </Button>
@@ -684,7 +1010,7 @@ export default function WebsiteManagementPage() {
                                                                         accept={key === 'video' ? 'video/mp4,video/webm' : 'image/*'} 
                                                                         onChange={(e) => {
                                                                             if (e.target.files && e.target.files[0]) {
-                                                                                handleMediaUpload(index, key, e.target.files[0]);
+                                                                                handleMediaUpload(section._frontendId, key, e.target.files[0]);
                                                                             }
                                                                         }}
                                                                     />
@@ -706,6 +1032,7 @@ export default function WebsiteManagementPage() {
                             </div>
                         </CardContent>
                     </Card>
+                    )}
                 </TabsContent>
             </Tabs>
         </div>
