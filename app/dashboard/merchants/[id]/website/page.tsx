@@ -63,7 +63,95 @@ type PageSection = {
     media_urls?: Record<string, string>;
     pendingFiles?: Record<string, File>;
     previewUrls?: Record<string, string>;
+    fields?: Record<string, string>;
 };
+
+const SECTION_TEMPLATES: Record<string, { label: string, fields: { key: string, label: string, type: 'text' | 'textarea' }[], media: string[] }> = {
+    hero: {
+        label: 'Hero Header (Large)',
+        fields: [
+            { key: 'title', label: 'Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+            { key: 'button_text', label: 'Button Text', type: 'text' },
+            { key: 'button_link', label: 'Button Link', type: 'text' },
+        ],
+        media: ['banner', 'background']
+    },
+    experience: {
+        label: 'Experience / About Us',
+        fields: [
+            { key: 'title', label: 'Section Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+            { key: 'content', label: 'Detailed Content', type: 'textarea' },
+        ],
+        media: ['image', 'video']
+    },
+    featured_rooms: {
+        label: 'Rooms Showcase',
+        fields: [
+            { key: 'title', label: 'Section Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+        ],
+        media: []
+    },
+    dining: {
+        label: 'Dining / Menu',
+        fields: [
+            { key: 'title', label: 'Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+            { key: 'content', label: 'Description', type: 'textarea' },
+            { key: 'menu_link', label: 'Menu PDF Link', type: 'text' },
+        ],
+        media: ['image']
+    },
+    testimonials: {
+        label: 'Testimonials Bar',
+        fields: [
+            { key: 'title', label: 'Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+        ],
+        media: []
+    },
+    booking_banner: {
+        label: 'Booking / CTA Banner',
+        fields: [
+            { key: 'title', label: 'Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+            { key: 'button_text', label: 'Button Text', type: 'text' },
+            { key: 'button_link', label: 'Button Link', type: 'text' },
+        ],
+        media: ['background']
+    },
+    gallery: {
+        label: 'Photo Gallery',
+        fields: [
+            { key: 'title', label: 'Gallery Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+        ],
+        media: ['image']
+    },
+    standard: {
+        label: 'Standard Content (Generic)',
+        fields: [
+            { key: 'title', label: 'Title', type: 'text' },
+            { key: 'sub_title', label: 'Sub-title', type: 'text' },
+            { key: 'content', label: 'Content', type: 'textarea' },
+        ],
+        media: ['image', 'background']
+    }
+};
+
+const ALL_AVAILABLE_FIELDS = [
+    { key: 'title', label: 'Section Title', type: 'text' },
+    { key: 'sub_title', label: 'Sub-title', type: 'text' },
+    { key: 'content', label: 'Detailed Content', type: 'textarea' },
+    { key: 'button_text', label: 'Button Text', type: 'text' },
+    { key: 'button_link', label: 'Button Link', type: 'text' },
+    { key: 'menu_link', label: 'Menu PDF Link', type: 'text' },
+    { key: 'address', label: 'Address', type: 'text' }
+] as const;
+
+const ALL_AVAILABLE_MEDIA = ['image', 'banner', 'video', 'background', 'poster'];
 
 export default function WebsiteManagementPage() {
     const { id: rawId } = useParams();
@@ -82,6 +170,7 @@ export default function WebsiteManagementPage() {
     const [expandedNavIndex, setExpandedNavIndex] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState<string>("navigation");
     const [selectedNavItemId, setSelectedNavItemId] = useState<number | null>(null);
+    const [customizingSectionId, setCustomizingSectionId] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!fetched.current) {
@@ -126,6 +215,7 @@ export default function WebsiteManagementPage() {
                                 title: contentMap.title || "",
                                 sub_title: contentMap.sub_title || "",
                                 content: contentMap.content || "",
+                                fields: contentMap,
                                 media_urls: mediaUrls
                             };
                         } catch (err) {
@@ -246,9 +336,11 @@ export default function WebsiteManagementPage() {
                 // 2. Update Contents
                 await api.put(`/admin/sections/${savedId}/contents`, {
                     fields: {
-                        title: section.title || "",
-                        sub_title: section.sub_title || "",
-                        content: section.content || ""
+                        ...(section.fields || {}),
+                        // Fallbacks just in case
+                        title: section.title || section.fields?.title || "",
+                        sub_title: section.sub_title || section.fields?.sub_title || "",
+                        content: section.content || section.fields?.content || ""
                     }
                 });
 
@@ -390,6 +482,18 @@ export default function WebsiteManagementPage() {
 
     const updateSection = (frontendId: string, field: keyof PageSection, value: any) => {
         setSections(prev => prev.map(s => s._frontendId === frontendId ? { ...s, [field]: value } : s));
+    };
+
+    const updateSectionField = (frontendId: string, fieldKey: string, value: any) => {
+        setSections(prev => prev.map(s => {
+            if (s._frontendId === frontendId) {
+                return {
+                    ...s,
+                    fields: { ...(s.fields || {}), [fieldKey]: value }
+                };
+            }
+            return s;
+        }));
     };
 
     const toggleNavItemVisibility = async (index: number) => {
@@ -749,8 +853,37 @@ export default function WebsiteManagementPage() {
                                                 <h4 className="text-sm font-semibold border-b pb-2">SEO & Social Sharing</h4>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div className="space-y-2">
-                                                        <Label className="text-xs">Meta Title</Label>
-                                                        <Input value={item.seo?.meta_title || ""} onChange={(e) => updateNavSeo(index, 'meta_title', e.target.value)} placeholder="Max 60 chars" />
+                                                        <div className="flex justify-between items-center">
+                                                            <Label className="text-xs">Meta Title</Label>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={cn(
+                                                                    "text-[10px] font-medium transition-colors",
+                                                                    (item.seo?.meta_title?.length || 0) > 60 ? "text-red-500" :
+                                                                    (item.seo?.meta_title?.length || 0) > 50 ? "text-amber-500" :
+                                                                    (item.seo?.meta_title?.length || 0) > 0 ? "text-emerald-500" :
+                                                                    "text-muted-foreground"
+                                                                )}>
+                                                                    {item.seo?.meta_title?.length || 0} / 60
+                                                                </span>
+                                                                <div className="flex gap-0.5 h-1.5 w-12 rounded-full overflow-hidden bg-muted">
+                                                                    <div className={cn(
+                                                                        "h-full transition-all duration-300",
+                                                                        (item.seo?.meta_title?.length || 0) > 60 ? "bg-red-500 w-full" :
+                                                                        (item.seo?.meta_title?.length || 0) > 50 ? "bg-amber-500 w-[85%]" :
+                                                                        (item.seo?.meta_title?.length || 0) > 0 ? "bg-emerald-500 w-[50%]" :
+                                                                        "bg-transparent w-0"
+                                                                    )} />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <Input 
+                                                            value={item.seo?.meta_title || ""} 
+                                                            onChange={(e) => updateNavSeo(index, 'meta_title', e.target.value)} 
+                                                            placeholder="Max 60 chars" 
+                                                            className={cn(
+                                                                (item.seo?.meta_title?.length || 0) > 60 && "border-red-500/50 focus-visible:ring-red-500"
+                                                            )}
+                                                        />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label className="text-xs">OG Title</Label>
@@ -880,7 +1013,19 @@ export default function WebsiteManagementPage() {
                                                     <Label className="text-[10px] uppercase text-muted-foreground">Section Type</Label>
                                                     <Select 
                                                         value={section.section_name} 
-                                                        onValueChange={(val) => updateSection(section._frontendId, 'section_name', val)}
+                                                        onValueChange={(val) => {
+                                                            const newTemplate = SECTION_TEMPLATES[val] || SECTION_TEMPLATES.standard;
+                                                            // Wipe custom settings when changing types to load new defaults
+                                                            setSections(prev => prev.map(s => {
+                                                                if (s._frontendId === section._frontendId) {
+                                                                    const newSettings = { ...(s.settings || {}) };
+                                                                    delete newSettings.enabled_fields;
+                                                                    delete newSettings.enabled_media;
+                                                                    return { ...s, section_name: val, settings: newSettings };
+                                                                }
+                                                                return s;
+                                                            }));
+                                                        }}
                                                     >
                                                         <SelectTrigger className="w-48 h-8 text-sm bg-transparent border-dashed shrink-0">
                                                             <SelectValue placeholder="Pick Type" />
@@ -924,6 +1069,16 @@ export default function WebsiteManagementPage() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs px-2 mr-2"
+                                                onClick={() => setCustomizingSectionId(customizingSectionId === section._frontendId ? null : section._frontendId)}
+                                                disabled={section.data_source === 'rooms'}
+                                            >
+                                                <Settings size={12} className="mr-1" />
+                                                {customizingSectionId === section._frontendId ? "Done" : "Customize Fields"}
+                                            </Button>
                                             <Label className="text-xs mr-1">Visible</Label>
                                             <Button 
                                                 variant={section.is_visible ? "default" : "outline"} 
@@ -943,85 +1098,185 @@ export default function WebsiteManagementPage() {
                                             </Button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <div className="space-y-2">
-                                            <Label>Section Title</Label>
-                                            <Input 
-                                                value={section.title || ""} 
-                                                onChange={(e) => updateSection(section._frontendId, 'title', e.target.value)}
-                                                placeholder={`Enter title for ${section.section_name} section`}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Section Sub-title</Label>
-                                            <Input 
-                                                value={section.sub_title || ""} 
-                                                onChange={(e) => updateSection(section._frontendId, 'sub_title', e.target.value)}
-                                                placeholder={`Enter sub-title for ${section.section_name} section`}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Section Content / Description</Label>
-                                            <Textarea 
-                                                rows={4}
-                                                value={section.content || ""} 
-                                                onChange={(e) => updateSection(section._frontendId, 'content', e.target.value)}
-                                                placeholder={`Enter content for ${section.section_name} section`}
-                                            />
-                                        </div>
-                                        <div className="space-y-2 border-t border-border/50 pt-2 mt-2">
-                                            <Label>Media (Optional)</Label>
-                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                                {['image', 'banner', 'video', 'background'].map((key) => {
-                                                    const backendUrl = section.media_urls?.[`${key}_url`];
-                                                    const pendingUrl = section.previewUrls?.[key];
-                                                    
-                                                    const currentMediaUrl = pendingUrl || backendUrl || null;
+                                    {(() => {
+                                        const templateParams = SECTION_TEMPLATES[section.section_name] || SECTION_TEMPLATES.standard;
+                                        const isDynamic = section.data_source === 'rooms';
+                                        const isCustomizing = customizingSectionId === section._frontendId;
+                                        
+                                        const enabledTextFieldKeys: string[] = Array.isArray(section.settings?.enabled_fields) 
+                                            ? section.settings!.enabled_fields 
+                                            : templateParams.fields.map(f => f.key);
+                                            
+                                        const enabledMediaKeys: string[] = Array.isArray(section.settings?.enabled_media) 
+                                            ? section.settings!.enabled_media 
+                                            : templateParams.media;
 
-                                                    return (
-                                                        <div key={key} className="space-y-2 border border-border p-3 rounded-md relative flex flex-col items-center justify-center min-h-[100px] bg-card">
-                                                            <div className="capitalize text-xs font-semibold text-muted-foreground w-full text-center">{key}</div>
-                                                            {currentMediaUrl ? (
-                                                                <div className="relative group w-full h-20 mt-1 flex items-center justify-center overflow-hidden rounded border border-border">
-                                                                    {key === 'video' ? (
-                                                                        <video src={currentMediaUrl} className="object-cover w-full h-full" muted loop playsInline />
-                                                                    ) : (
-                                                                        <img src={currentMediaUrl} alt={key} className="object-cover w-full h-full" />
-                                                                    )}
-                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                        <Button 
-                                                                            variant="destructive" 
-                                                                            size="icon" 
-                                                                            className="h-8 w-8 rounded-full shadow-sm"
-                                                                            title="Remove Media"
-                                                                            onClick={() => handleMediaDelete(section._frontendId, key)}
-                                                                        >
-                                                                            <Trash2 size={14} />
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <label className="cursor-pointer flex flex-col items-center justify-center p-2 rounded-md hover:bg-muted/50 transition-colors w-full h-full">
-                                                                    <Plus size={16} className="text-muted-foreground mb-1" />
-                                                                    <span className="text-[10px] text-muted-foreground">Upload</span>
-                                                                    <input 
-                                                                        type="file" 
-                                                                        className="hidden" 
-                                                                        accept={key === 'video' ? 'video/mp4,video/webm' : 'image/*'} 
-                                                                        onChange={(e) => {
-                                                                            if (e.target.files && e.target.files[0]) {
-                                                                                handleMediaUpload(section._frontendId, key, e.target.files[0]);
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </label>
-                                                            )}
+                                        if (isCustomizing) {
+                                            return (
+                                                <div className="p-4 border border-primary/20 bg-primary/5 rounded-md mt-4 space-y-4">
+                                                    <h4 className="font-semibold text-sm">Select Fields for this Section</h4>
+                                                    <p className="text-xs text-muted-foreground">Check the specific text and media inputs you want to enable when filling out data for this section.</p>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <h5 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Text Fields</h5>
+                                                            <div className="space-y-2">
+                                                                {ALL_AVAILABLE_FIELDS.map(f => (
+                                                                    <label key={f.key} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-background p-1.5 rounded">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={enabledTextFieldKeys.includes(f.key)}
+                                                                            onChange={(e) => {
+                                                                                const newKeys = e.target.checked 
+                                                                                    ? [...enabledTextFieldKeys, f.key] 
+                                                                                    : enabledTextFieldKeys.filter(k => k !== f.key);
+                                                                                updateSection(section._frontendId, 'settings', { ...(section.settings || {}), enabled_fields: newKeys, enabled_media: enabledMediaKeys });
+                                                                            }}
+                                                                        />
+                                                                        {f.label}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
                                                         </div>
-                                                    )
-                                                })}
+
+                                                        <div>
+                                                            <h5 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Media Slots</h5>
+                                                            <div className="space-y-2">
+                                                                {ALL_AVAILABLE_MEDIA.map(m => (
+                                                                    <label key={m} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-background p-1.5 rounded">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={enabledMediaKeys.includes(m)}
+                                                                            onChange={(e) => {
+                                                                                const newKeys = e.target.checked 
+                                                                                    ? [...enabledMediaKeys, m] 
+                                                                                    : enabledMediaKeys.filter(k => k !== m);
+                                                                                updateSection(section._frontendId, 'settings', { ...(section.settings || {}), enabled_fields: enabledTextFieldKeys, enabled_media: newKeys });
+                                                                            }}
+                                                                        />
+                                                                        <span className="capitalize">{m}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <Button size="sm" onClick={() => setCustomizingSectionId(null)}>Done Customizing</Button>
+                                                </div>
+                                            );
+                                        }
+
+                                        const activeTextFields = ALL_AVAILABLE_FIELDS.filter(f => enabledTextFieldKeys.includes(f.key));
+                                        const activeMediaKeys = ALL_AVAILABLE_MEDIA.filter(m => enabledMediaKeys.includes(m));
+
+                                        return (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-border/50 mt-2">
+                                                {/* Left Column: Text Fields */}
+                                                <div className="space-y-4">
+                                                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                                                        <FileText size={16} /> Content Fields
+                                                    </h4>
+                                                    
+                                                    {isDynamic ? (
+                                                        <div className="p-4 border-2 border-dashed rounded-lg bg-muted/20 flex flex-col items-center justify-center text-center h-[200px]">
+                                                            <Database className="h-8 w-8 text-primary/50 mb-2" />
+                                                            <p className="font-semibold text-sm">Dynamic Data Source</p>
+                                                            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                                                                Data for this section is pulled automatically from your hotel's database (rooms, availability, etc.).
+                                                            </p>
+                                                        </div>
+                                                    ) : activeTextFields.length === 0 ? (
+                                                        <div className="p-4 text-xs text-muted-foreground italic bg-muted/20 rounded-md">
+                                                            No text configuration needed for this section template.
+                                                        </div>
+                                                    ) : (
+                                                        activeTextFields.map((field) => (
+                                                            <div key={field.key} className="space-y-1">
+                                                                <Label className="text-xs text-muted-foreground">{field.label}</Label>
+                                                                {field.type === 'textarea' ? (
+                                                                    <Textarea 
+                                                                        rows={4}
+                                                                        value={section.fields?.[field.key] || section[field.key as keyof PageSection] as string || ""} 
+                                                                        onChange={(e) => updateSectionField(section._frontendId, field.key, e.target.value)}
+                                                                        placeholder={`Enter ${field.label.toLowerCase()}`}
+                                                                        className="text-sm"
+                                                                    />
+                                                                ) : (
+                                                                    <Input 
+                                                                        value={section.fields?.[field.key] || section[field.key as keyof PageSection] as string || ""} 
+                                                                        onChange={(e) => updateSectionField(section._frontendId, field.key, e.target.value)}
+                                                                        placeholder={`Enter ${field.label.toLowerCase()}`}
+                                                                        className="h-9 text-sm"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+
+                                                {/* Right Column: Media Fields */}
+                                                <div className="space-y-4">
+                                                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                                                        <Settings size={16} /> Media configuration
+                                                    </h4>
+                                                    {activeMediaKeys.length === 0 ? (
+                                                        <div className="p-4 text-xs text-muted-foreground italic bg-muted/20 rounded-md">
+                                                            No media configuration supported for this section template.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            {activeMediaKeys.map((key) => {
+                                                                const backendUrl = section.media_urls?.[`${key}_url`];
+                                                                const pendingUrl = section.previewUrls?.[key];
+                                                                const currentMediaUrl = pendingUrl || backendUrl || null;
+                                                                
+                                                                return (
+                                                                    <div key={key} className="space-y-2 border border-border p-3 rounded-md relative flex flex-col items-center justify-center min-h-[120px] bg-card hover:border-primary/50 transition-colors">
+                                                                        <div className="capitalize text-[10px] uppercase tracking-wider font-semibold text-muted-foreground w-full text-center mb-1">{key}</div>
+                                                                        {currentMediaUrl ? (
+                                                                            <div className="relative group w-full h-24 flex items-center justify-center overflow-hidden rounded border border-border">
+                                                                                {key === 'video' ? (
+                                                                                    <video src={currentMediaUrl} className="object-cover w-full h-full" muted loop playsInline />
+                                                                                ) : (
+                                                                                    <img src={currentMediaUrl} alt={key} className="object-cover w-full h-full" />
+                                                                                )}
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                                                                    <Button 
+                                                                                        variant="destructive" 
+                                                                                        size="icon" 
+                                                                                        className="h-8 w-8 rounded-full shadow-sm"
+                                                                                        title="Remove Media"
+                                                                                        onClick={() => handleMediaDelete(section._frontendId, key)}
+                                                                                    >
+                                                                                        <Trash2 size={14} />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <label className="cursor-pointer flex flex-col items-center justify-center p-3 rounded-md hover:bg-muted/50 transition-colors border-2 border-dashed border-muted-foreground/20 w-full h-24">
+                                                                                <Plus size={16} className="text-muted-foreground mb-1" />
+                                                                                <span className="text-[10px] text-muted-foreground">Upload File</span>
+                                                                                <input 
+                                                                                    type="file" 
+                                                                                    className="hidden" 
+                                                                                    accept={key === 'video' ? 'video/mp4,video/webm' : 'image/*'} 
+                                                                                    onChange={(e) => {
+                                                                                        if (e.target.files && e.target.files[0]) {
+                                                                                            handleMediaUpload(section._frontendId, key, e.target.files[0]);
+                                                                                        }
+                                                                                    }}
+                                                                                />
+                                                                            </label>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
                             ))}
                             <div className="flex justify-end pt-4">
